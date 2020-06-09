@@ -1,0 +1,6 @@
+library(data.table)
+setwd("//ahmct-065/teams/PMRF/Amir/LEMO")
+files_lst=list.files(pattern="*.csv")
+files=lapply(files_lst, fread)
+df=rbindlist(files, use.names = TRUE, fill = TRUE)
+fwrite(df, file="LEMO-2013.csv", sep=",", append=FALSE)

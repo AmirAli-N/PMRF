@@ -221,7 +221,7 @@ chp_summary.to_csv("chp_summary.csv", sep=",")
 # Use the `gmaps` library which has implemented some of the `google maps java script api` functionality including `heatmaps`. Read the summarised data for plotting heatmap without the weights. For a heatmap including weights, read the original `CHP.csv`file as well. 
 
 import gmaps
-gmaps.configure(api_key="AIzaSyA7YArDVXUXhgJjCybDBsVCpXeYm7epACg")
+gmaps.configure(api_key="something")
 
 import os
 import pandas as pd

@@ -92,3 +92,5 @@ Performance Measures for Maintenance of Roadside Features
 39-STAT(SWITRS_wzOnly_LEMO_LCS_AADT).R
 40-STAT(SWITRS_wzOnly)
 41-STAT(SWITRS).R
+
+NOTE: The files are not numbered in order of operation

@@ -63,34 +63,35 @@ Performance Measures for Maintenance of Roadside Features
 25-MATCH(LEMO_WorkOrder, ClosureMatches).R\
 26-MATCH(LEMO_WorkOrder, collisionDensity).R\
 27-MATCH(SWITRS, CleanRouteFile).R\
-28-MATCH(SWITRS, WorkOrder).R
+28-MATCH(SWITRS, WorkOrder).R\
+29-MATCH(LCS, CHP).R
 
-29-Pipeline(LEMO_WorkOrder_LCS_AADT_TRUCK).R\
+30-Pipeline(LEMO_WorkOrder_LCS_AADT_TRUCK).R\
   a pipeline to match LEMO_WorkOrder, LCS, AADT, and TRUCK AADT calling appropriate MATCH functions
 
-30-pm_odom_geocode_query.py\
+31-pm_odom_geocode_query.py\
   script to define HTTP request for Caltrans API to convert postmiles to coordinates
   
-31-pm_odom_query.py\
+32-pm_odom_query.py\
   script to define HTTP request for Caltrans API to convert postmiles to odometers
   
-32-pm_submit_queries.py\
+33-pm_submit_queries.py\
   a script to build xml request and translate xml responses
 
-33-print_forOdometerConversion(CleanRouteFile).R\
+34-print_forOdometerConversion(CleanRouteFile).R\
   print the neccessary fields of CleanRouteFile for odometer conversion
   
-34-print_forOdometerConversion(SWITRS).R\
-35-Sankey(IMMS Crew classification).R\
+35-print_forOdometerConversion(SWITRS).R\
+36-Sankey(IMMS Crew classification).R\
   generate a sankey diagram for IMMS and Crew classification
   
-36-STAT(LEMO_WorkOrder_LCS).R\
+37-STAT(LEMO_WorkOrder_LCS).R\
   generating some highlevel statistical observation of the joint LEMO_WorkOrder_LCS dataset
   
-37-STAT(LEMO).R\
-38-STAT(SWITRS_CleanRouteFeatures).R\
-39-STAT(SWITRS_wzOnly_LEMO_LCS_AADT).R\
-40-STAT(SWITRS_wzOnly)\
-41-STAT(SWITRS).R
+38-STAT(LEMO).R\
+39-STAT(SWITRS_CleanRouteFeatures).R\
+40-STAT(SWITRS_wzOnly_LEMO_LCS_AADT).R\
+41-STAT(SWITRS_wzOnly)\
+42-STAT(SWITRS).R
 
 NOTE: The files are not numbered in order of operation

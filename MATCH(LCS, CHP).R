@@ -69,7 +69,7 @@ colnames(res)=c("DB_ID", "CASE_ID")
 
 #match every collision
 pm.tol=0.25
-for (i in 1:dim(CHP.temp)[1]){
+for (i in i:dim(CHP.temp)[1]){
 #for (i in 1:1000){
   #mathc the route
   temp.closure=LCS.temp[LCS.temp$FwyID==CHP.temp$STATE_ROUTE[i],]
@@ -102,9 +102,9 @@ for (i in 1:dim(CHP.temp)[1]){
   }else{
     res=rbind(res, cbind("DB_ID"=temp.closure$`DB ID`, "CASE_ID"=CHP.temp$CASE_ID[i]))
   }
-  if (i%%100000==0){
-    fwrite(res, './bin/LCS_ID.match.CHP.csv', sep=",", append = FALSE)
+  if (i%%10000==0){
     print(i)
+    fwrite(res, './bin/LCS_ID.match.CHP.csv', sep=",", append = FALSE)
   }
 }
 

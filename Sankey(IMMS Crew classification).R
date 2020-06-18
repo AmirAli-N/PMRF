@@ -30,7 +30,7 @@ for (i in prop.group){
     }
   }
 }
-p <- sankeyNetwork(Links = links, Nodes = nodes, Source = "source",
+p <-  networkD3::sankeyNetwork(Links = links, Nodes = nodes, Source = "source",
                    Target = "target", Value = "value", NodeID = "name",
                    units = "TWh", fontSize = 16, fontFamily = "century gothic", nodeWidth = 10)
 
@@ -52,7 +52,7 @@ p
 )
 
 
-df=fread(file="Book2.csv", sep=",", header = FALSE)
+df=fread(file="table_crew.csv", sep=",", header = FALSE)
 colnames(df)=c("TableName", "Crew")
 
 nodes=cbind.data.frame(1:(length(unique(df$TableName))+length(unique(df$Crew))), 
@@ -78,6 +78,6 @@ for (i in table.name){
 
 p <- sankeyNetwork(Links = links, Nodes = nodes, Source = "source",
                    Target = "target", Value = "value", NodeID = "name",
-                   units = "TWh", fontSize = 14, nodeWidth = 10)
+                   units = "TWh", fontSize = 16, fontFamily = "century gothic", nodeWidth = 10)
 
 p

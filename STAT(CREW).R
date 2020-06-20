@@ -19,7 +19,8 @@ df.family=pivot_wider(df.family, id_cols = FAMILY, names_from = FY, values_from 
 df.activity=setDT(df)[order(FY, ACTCODE), .(sum.employee=sum(EMPCOUNT)), 
                       by=.(FY, ACTCODE)]
 df.activity_pivot=pivot_wider(df.activity, id_cols = ACTCODE, names_from = FY, values_from = sum.employee)
-
+df.activity_pivot=cbind.data.frame(df.activity_pivot, 
+                                   change=df.activity_pivot$`2019`-df.activity_pivot$`2013`)
 x=seq(2013, 2019, 1)
 slope=c()
 for (i in 1:dim(df.activity_pivot)[1]){
@@ -31,6 +32,11 @@ for (i in 1:dim(df.activity_pivot)[1]){
   trend.model=trendline_summary(x, y, model = "line2P", summary = FALSE, eDigit = 2)
   slope=c(slope, trend.model$parameter$a)
 }
+df.activity_pivot=cbind.data.frame(df.activity_pivot, slope=slope)
+fwrite(df.activity_pivot, file = "activity_crew+netChange_slope.csv", sep = ",", append = FALSE)
+
+df.activity_pivot=setDT(df.activity_pivot)[order(change),,]
+df.activity_pivot=setDT(df.activity_pivot)[order(slope),,]
 
 example.code=c("C20040", "C21040", "C22040", "C23040", "C24040",
                "C30020", "C30040", "C31040", "C32040")

@@ -8,9 +8,9 @@ library(anytime)
 library(e1071)
 library(DMwR)
 library(glmnet)
+library(doParallel)
+library(ggplot2)
 library(hrbrthemes)
-library(viridis)
-library(ggrepel)
 
 set.seed(123)
 
@@ -33,7 +33,7 @@ selected_cols=c("work_date", "activity", "district", "county", "route", "work_du
 
 
 #cleanUp features and convert to type
-source("./Codes/FUNC(Dataset CleanUp).R")
+source("./Codes/FUNC_clean(FinalDataSet).R")
 df=cleanUp_Dataset(df, selected_cols)
 
 #check clean up process
@@ -45,35 +45,45 @@ df=na.omit(setDT(df), cols = c("work_month", "work_day", "district", "county", "
                         "access_type", "terrain_type", "road_speed", "road_adt", "population_code", 
                         "peak_aadt", "aadt", "truck_aadt", "collision_density11_12"))
 
+####FOR MULTINOMIAL REGRESSION ONLY####
+unique(df$collision_severity)
+df$collision_severity[df$collision_severity %in% c(1, 2, 3, 4)]=2 #for symptomatic injury or fatality
+df$collision_severity[df$collision_severity==0]=1 #for PDO
+df$collision_severity[is.na(df$collision_severity)]=0 #for no collision
+df$collision_severity=droplevels(df$collision_severity)
+unique(df$collision_severity)
+
 #check and plot the proportion of response variable classes
 length(which(df$collision_id==1))/length(df$collision_id)
-ggplot(data=df, aes(x=collision_id, fill=collision_id))+
+ggplot(data=df, aes(x=collision_severity, fill=collision_severity))+
   geom_bar()+
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=14),
         axis.title.x = element_text(size = 20, face="bold"),
         axis.text.y = element_text(size=14),
         axis.title.y = element_text(size=20, face = "bold"), legend.position = "none")+
   ylab("count")+
-  xlab("collision id")+
+  xlab("collision severity")+
   labs(fill="collision")
 
-#create training and testing splits
-train.ind=createDataPartition(df$collision_id, times = 1, p=0.7, list = FALSE)
-training.df=df[train.ind, ]
-testing.df=df[-train.ind, ]
-
 #SMOTE balanced sampling
-balanced.df=SMOTE(collision_id~., data = training.df, perc.over = 200, perc.under = 200, k = 5)
+balanced01.df=SMOTE(collision_severity~., 
+                    data = droplevels.data.frame(df[which(df$collision_severity %in% c(0,1)),]), 
+                    perc.over = 200, perc.under = 200, k = 5)
+balanced02.df=SMOTE(collision_severity~., 
+                    data = droplevels.data.frame(df[which(df$collision_severity %in% c(0,2)),]), 
+                    perc.over = 200, perc.under = 200, k = 5)
 
-###################################################
-##ONLY FOR LEMO_CHP.by.roadCond_workOrderDate.csv##
-##no need to balance
-#balanced.df=training.df
-###################################################
+balanced.df=rbind(balanced01.df, balanced02.df)
+balanced.df=balanced.df %>% distinct()
+
+#create training and testing splits
+train.ind=createDataPartition(balanced.df$collision_severity, times = 1, p=0.7, list = FALSE)
+training.df=balanced.df[train.ind, ]
+testing.df=balanced.df[-train.ind, ]
 
 #check and plot the proportion of response variable classes
 length(which(balanced.df$collision_id==1))/length(balanced.df$collision_id)
-ggplot(data=balanced.df, aes(x=collision_id, fill=collision_id))+
+ggplot(data=training.df, aes(x=collision_severity, fill=collision_severity))+
   geom_bar()+
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=14),
         axis.title.x = element_text(size = 20, face="bold"),
@@ -84,9 +94,9 @@ ggplot(data=balanced.df, aes(x=collision_id, fill=collision_id))+
   labs(fill="collision")
 
 #process the balanced data set for categorical and numerical variables
-balanced.cat.df=balanced.df %>% select_if(is.factor)
+balanced.cat.df=training.df %>% select_if(is.factor)
 `isnot.factor` = Negate(`is.factor`)
-balanced.num.df=balanced.df %>% select_if(isnot.factor)
+balanced.num.df=training.df %>% select_if(isnot.factor)
 
 #drop collision and closure columns, some of NA variabels can be translated to 0-1 categories or numerics
 balanced.cat.df=balanced.cat.df[,-c("closure_workType", "closure_duration", "closure_type", "closure_facility")]
@@ -99,14 +109,17 @@ balanced.num.df$closure_coverage=abs(balanced.num.df$closure_coverage)
 balanced.num.df$closure_length[is.na(balanced.num.df$closure_length)]=0
 
 balanced.cat.df=balanced.cat.df[,-c("collision_time", "collision_day", "collision_weather_cond_1", "collision_weather_cond_2", 
-                                    "collision_location_type", "collision_ramp_intersection", "collision_severity", "collision_prime_factor", 
+                                    "collision_location_type", "collision_ramp_intersection", "collision_prime_factor", 
                                     "collision_violation_cat", "collision_surface_cond", "collision_road_cond_1", "collision_road_cond_2", 
                                     "collision_lighting_cond", "collision_control_device", "collision_road_type")]
 
 balanced.num.df=balanced.num.df[,-c("collision_num_killed", "collision_num_injured", "collision_party_count")]
 
+#take the response vector
+y=unlist(balanced.cat.df[,"collision_severity"])
+balanced.cat.df=setDF(balanced.cat.df)[,!colnames(balanced.cat.df)%in% c("collision_severity")]
+
 #convert categorical variables to dummy binaries
-balanced.cat.df$collision_id=as.factor(balanced.cat.df$collision_id)
 dummy.mod=dummyVars(~., data = balanced.cat.df, fullRank = TRUE, drop2nd=TRUE)
 balanced.cat.df=predict(dummy.mod, newdata = balanced.cat.df)
 
@@ -116,63 +129,68 @@ balanced.num.df=predict(preprocess.mod, balanced.num.df)
 balanced.num.df=data.matrix(balanced.num.df)
 
 #join the two matrix for more preprocessing
-preprocess.df=cbind(balanced.cat.df, balanced.num.df)
-y=preprocess.df[,"collision_id.1"]
-preprocess.df=preprocess.df[,!colnames(preprocess.df) %in% c("collision_id.1")]
-#rm(balanced.cat.df, balanced.num.df)
+training.df=cbind(balanced.cat.df, balanced.num.df)
+rm(balanced.cat.df, balanced.num.df, balanced.df)
 
 #remove near zero variance
-nzv=nearZeroVar(preprocess.df)
-preprocess.df=preprocess.df[, -nzv]
+nzv=nearZeroVar(training.df)
+training.df=training.df[, -nzv]
 
 #remove multicollinearity
-descrCor=cor(preprocess.df)
+descrCor=cor(training.df)
 highlyCorDescr=findCorrelation(descrCor, cutoff = .75)
-preprocess.df=preprocess.df[, -highlyCorDescr]
+training.df=training.df[, -highlyCorDescr]
 
 #remove linear dependencies
-comboInfo=findLinearCombos(preprocess.df)
+comboInfo=findLinearCombos(training.df)
 if (length(comboInfo$remove) > 0) {
-  preprocess.df=preprocess.df[, -comboInfo$remove] 
+  training.df=training.df[, -comboInfo$remove] 
 }
 
+#check the remaining variables
+colnames(training.df)
+if("collision_id.1" %in% colnames(training.df)){
+  training.df=training.df[,!colnames(training.df) %in% c("collision_id.1")]
+}
 ###################################################################################################################
 ###################################################################################################################
-######################################################################################recursive feature elimination
-##set the regression function to logistic:default
-# lrFuncs$fit<-function (x, y, first, last, ...){   
-#   tmp <- as.data.frame(x)   
-#   tmp$y <- y   
-#   glm(y ~ ., data = tmp,family="binomial")   
-# }
+####################################################################################################### Elastic net
+y=as.numeric(as.character(y))
+training.df=as(as.matrix(training.df), "dgCMatrix")
 
-#lrFuncs$fit<-function (x, y, first, last, ...){   
-#  glmnet(x, y, family="binomial")   
-#}
+#### for imabalanced data ##############################
+#evaluate the weight of each class in response variable
+sumwpos=sum(y==1)
+sumwneg=sum(y==0)
+weights=ifelse(y==0, 1, sumwneg/sumwpos)
 
-#create cross validation folds
-index=createFolds(y, k = 5, returnTrain = T)
-ctrl=rfeControl(functions = lrFuncs, method = "repeatedcv", index=index, repeats = 1, verbose = TRUE)
+n_cores=detectCores()
+my_cluster=makeCluster(n_cores)
+registerDoParallel(my_cluster)
 
-#split independent and dependent variables
-# x=balanced.df[,-which(colnames(balanced.df)=="collision_id.1")]
-# x=as.data.frame(x)
-# y=balanced.df[,"collision_id.1"]
+elastic.mod=cv.glmnet(x=x, y=y, family="binomial", nfolds=5, 
+                      type.logistic="modified.Newton", type.measure="class", 
+                      trace.it = 1, parallel = TRUE)
+stopCluster(my_cluster)
 
-
-#recursive feature elimination
-rfe.mod=rfe(preprocess.df, as.factor(y), sizes = c(1:61), rfeControl = ctrl, metric = "Accuracy")
-
-predictors(rfe.mod)
-rfe.mod$fit
-trellis.par.set(caretTheme())
-plot(rfe.mod, type=c("g", "o"))
-
-ggplot(rfe.mod$results, aes(x=Variables, y=Accuracy, fill="black"))+
+plot(elastic.mod)
+elastic.mod$cvm[which(elastic.mod$lambda==elastic.mod$lambda.1se)]
+elastic.mod$nzero[which(elastic.mod$lambda==elastic.mod$lambda.1se)]
+elastic.mod$cvm[which(elastic.mod$lambda==elastic.mod$lambda.min)]
+elastic.mod$nzero[which(elastic.mod$lambda==elastic.mod$lambda.min)]
+num.label=elastic.mod$nzero
+num.label[seq_along(num.label) %% 2 == 0]=""
+ggplot(data=data.frame(elastic.mod$cvm, elastic.mod$lambda, elastic.mod$nzero), 
+       aes(x=log(elastic.mod.lambda), y=elastic.mod.cvm))+
   geom_line(size=1)+
+  geom_vline(xintercept = log(elastic.mod$lambda.1se), linetype="dashed")+
+  geom_vline(xintercept = log(elastic.mod$lambda.min), linetype="dashed")+
   geom_point(size=2.5)+
   theme_ipsum(axis_title_just = 'center')+
-  scale_x_continuous(breaks = seq(0, 60, 10), labels = seq(0, 60, 10), expand = c(0, 5))+
+  scale_x_continuous(breaks = seq(-9, 0, 1), labels = seq(-9, 0, 1),
+                     sec.axis = sec_axis(~.*(-10.8), breaks = seq(1, 99, 1), 
+                                         labels = c(rep("", 14), num.label, rep("", 6)),
+                                         name="Number of variables"))+
   theme(axis.title.x = element_text(size = 18, family = "Century Gothic", colour = "black",
                                     margin=margin(15, 0, 0, 0,)),
         axis.text.x = element_text(size=18, family = "Century Gothic", color = "black"),
@@ -181,27 +199,56 @@ ggplot(rfe.mod$results, aes(x=Variables, y=Accuracy, fill="black"))+
         axis.text.y = element_text(size=18, family = "Century Gothic", color = "black"),
         axis.line.x = element_line(size=1.5, colour = "black"),
         axis.line.y = element_line(size=1.5, colour = "black"),
-        legend.position = "none")+
-  geom_label_repel(data=data.frame(Variables=54, Accuracy=0.9342), 
-                   label="Num. of Variables = 54\n Acc: 0.9342\n Kappa=0.8659",
-                   nudge_y = -.02, size = 6,
-                   arrow = arrow(length = unit(0.03, "npc"), type = "closed", ends = "first"),
-                   family="Century Gothic")+
-  xlab("Number of Variables")
+        axis.text.x.top = element_text(angle = 0, size=18, family = "Century Gothic", 
+                                       color = "black"),
+        axis.title.x.top = element_text(margin = margin(0, 0, 15, 0), size=18, 
+                                        family = "Century Gothic", color = "black"),
+        legend.position = "none",
+        panel.grid.minor = element_blank(), panel.grid.major = element_blank())+
+  xlab(expression(paste("ln(", lambda, ")",sep = "")))+
+  ylab(expression(1-"Accuracy"))+
+  geom_label(data=data.frame(elastic.mod.lambda=elastic.mod$lambda.1se, elastic.mod.cvm=0.3), 
+             label="Num. of Variables = 59\n 1-Acc: 0.0862\n lamba=0.0007",
+             nudge_y = -.05, nudge_x = 0.5, size = 6,
+             family="Century Gothic")+
+  geom_label(data=data.frame(elastic.mod.lambda=elastic.mod$lambda.min, elastic.mod.cvm=0.4), 
+             label="Num. of Variables = 60\n 1-Acc: 0.058\n lamba=0.0001",
+             nudge_y = -.05, nudge_x = 0.5, size = 6,
+             family="Century Gothic")
 
-imp=varImp(rfe.mod, scale=TRUE)
-summary(rfe.mod)
-rfe.mod
-coeff=data.frame(coefficients(rfe.mod$fit))
+coefficients(elastic.mod, elastic.mod$lambda.min)
+summary(elastic.mod$glmnet.fit)
+########################################################
+
+## using the glmnet library
+
+n_cores=detectCores()
+my_cluster=makeCluster(n_cores)
+registerDoParallel(my_cluster)
+
+training.df=sparse.model.matrix(y~.-1, data = data.frame(training.df))
+elastic.mod=cv.glmnet(x=training.df, y=y, family="multinomial", nfolds=5, type.multinomial="grouped",
+                      type.logistic="modified.Newton", type.measure="deviance", trace.it = 1, parallel = TRUE)
+stopCluster(my_cluster)
+plot(elastic.mod)
+coefficients(elastic.mod, elastic.mod$lambda.min)
+
+## using the caret library
+#preprocess.df=cbind.data.frame(y, preprocess.df)
+#trCtrl=trainControl(method = "repeatedcv", index=index, repeats = 1, search = "random", verboseIter = TRUE)
+#elastic.mod=train(as.factor(y)~., data=balanced.df, method="glmnet", tuneLength=25, trControl=trCtrl)
+#coef(elastic.mod$finalModel, elastic.mod$bestTune$lambda)
+
 ####################################################################################################################
 ####################################################################################################################
 ######################################################################################################### Prediction
-testing.df=fread(file="./bin/test(collision2class)_by.roadCondition.csv", sep=",", header=TRUE)
-names(testing.df)[which(names(testing.df)=="collision_id.1")]="y"
 
-#glm.data=data.frame(preprocess.df[, colnames(preprocess.df) %in% rfe.mod$optVariables])
-glm.data=data.frame(x[, colnames(x) %in% rfe.mod$optVariables[1:54]])
-glm.mod=train(as.factor(y)~., data = cbind(glm.data, y) , method="glm")
-summary(glm.mod$finalModel)
-predicted.glm = predict(rfe.mod, testing.df)
-confusionMatrix(predicted.glm$pred, as.factor(testing.df$y), positive = "1")
+#testing.df=fread(file="./bin/test(severity3class)_by.roadCondition_closureTime.csv", sep=",", header=TRUE)
+testing.df=fread(file="./bin/test(severity4class)_by.roadCondition_workOrderDate.csv", sep=",", header=TRUE)
+y_test=unlist(testing.df[,"collision_severity"])
+
+test.matrix=setDF(testing.df)[, names(testing.df) %in% colnames(training.df)]
+test.matrix=data.matrix(test.matrix)
+
+predicted.net=predict(elastic.mod, test.matrix, s=elastic.mod$lambda.min, type="class")
+confusionMatrix(as.factor(predicted.net), as.factor(y_test))

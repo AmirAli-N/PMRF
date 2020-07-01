@@ -12,6 +12,9 @@ library(glmnet)
 library(xgboost)
 library(DiagrammeR)
 library(ggplot2)
+library(hrbrthemes)
+library(viridis)
+library(ggrepel)
 
 library(Ckmeans.1d.dp)
 library(devtools)
@@ -48,9 +51,14 @@ df=na.omit(setDT(df), cols = c("work_month", "work_day", "district", "county", "
                                "access_type", "terrain_type", "road_speed", "road_adt", "population_code", 
                                "peak_aadt", "aadt", "truck_aadt", "collision_density11_12"))
 
+#create training and testing data set
+train.ind=createDataPartition(df$collision_id, times = 1, p=0.7, list = FALSE)
+training.df=df[train.ind, ]
+testing.df=df[-train.ind, ]
+
 #check and plot response variable class
-length(which(df$collision_id==1))/length(df$collision_id)
-ggplot(data=df, aes(x=collision_id, fill=collision_id))+
+length(which(training.df$collision_id==1))/length(training.df$collision_id)
+ggplot(data=training.df, aes(x=collision_id, fill=collision_id))+
   geom_bar()+
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=14),
         axis.title.x = element_text(size = 20, face="bold"),
@@ -58,11 +66,6 @@ ggplot(data=df, aes(x=collision_id, fill=collision_id))+
         axis.title.y = element_text(size=20, face = "bold"), legend.position = "none")+
   ylab("Count")+
   xlab("Class collision")
-
-#create training and testing data set
-train.ind=createDataPartition(df$collision_id, times = 1, p=0.7, list = FALSE)
-training.df=df[train.ind, ]
-testing.df=df[-train.ind, ]
 ###############################################################################################################################################
 ###############################################################################################################################################
 ###############################################################################################################################################
@@ -111,20 +114,35 @@ sumwpos=sum(label==1)
 sumwneg=sum(label==0)
 
 #train the xgboost model
-xgb.mod=xgboost(data = dtrain, label = label, max.depth=10, eta=0.1, nthread=3, scale_pos_weight=sumwneg/sumwpos,
-                eval_metric="auc", nrounds=100, objective="binary:logistic")
+xgb.mod=xgboost(data = dtrain, label = label, max.depth=10, eta=0.5, nthread=4, 
+                scale_pos_weight=sumwneg/sumwpos, eval_metric="auc", nrounds=250, 
+                objective="binary:logistic")
 
 #evaluate and plot feature importance
 importance=xgb.importance(feature_names = colnames(dtrain), model = xgb.mod)
-(gg=xgb.ggplot.importance(importance_matrix = importance[1:20,]))
-gg+theme(plot.title = element_text(angle = 0, size=24, face = "bold"),
-         axis.text.x = element_text(angle = 0, hjust = 0.5, size=14),
-         axis.title.x = element_text(size = 20, face="bold"),
-         axis.text.y = element_text(size=14),
-         axis.title.y = element_text(size=20, face = "bold"), legend.position = "none")+
+feat.label=importance$Feature[1:30]
+feat.label=c("Closure = 1", "Work length", "Collision density", "Truck AADT",
+             "ADT", "Closure coverage", "Peak AADT", "Work duration", "Closure length",
+             "AADT", "Design speed", "Route ID = 10", "County = SJ", "Activity code = M90000",
+             "Road width", "Surface type = C", "Work month = Sep.", "Work month = Jul.", 
+             "Work day = Wed.", "Route ID = 210", "Work day = Fri.", "Work day = Thu.", 
+             "Work day = Mon.", "Work day = Tue.", "Barrier type = E", "Work month = Jan.",
+             "Work month = Dec.", "District = 8", "District = 4", "Work month = Aug.")
+(gg=xgb.ggplot.importance(importance_matrix = importance[1:30,]))
+gg+theme_ipsum(axis_title_just = "center")+
+  theme(plot.title = element_blank(),
+         axis.text.x = element_text(angle = 0, hjust = 0.5, size=18, 
+                                    family = "Century Gothic", color = "black"),
+         axis.title.x = element_text(size = 18, family = "Century Gothic", color = "black",
+                                     margin = margin(15, 0, 0, 0)),
+         axis.text.y = element_text(size=18, family = "Century Gothic", color = "black"),
+         axis.title.y = element_text(size=18, family = "Century Gothic", color = "black",
+                                     margin = margin(0, 15, 0, 0)),
+        axis.line.x = element_line(size=1.2),
+        legend.position = "none")+
+  scale_x_discrete(labels=rev(feat.label))+
   xlab("Features")+
-  ylab("Average relative contribution to the loss reduction gained when using a feature")+
-  ggtitle("Feature Importance")
+  ylab("Average relative contribution to minimization of the objective function")
 
 #predict the test data
 temp.predict=predict(xgb.mod, dtest)
@@ -135,15 +153,21 @@ confusionMatrix(as.factor(temp.predict), as.factor(testing.df$collision_id), pos
 ###############################################################################################################################################
 ###############################################################################################################################################
 #fit glm to the top features
-featureSet=importance$Feature[1:30]
+featureSet=importance$Feature[1:54]
 x=dtrain[, colnames(dtrain) %in% featureSet]
 weights=ifelse(label==0, 1, sumwneg/sumwpos)
 
-#glm.mod=cv.glmnet(x=x, y=label, family="binomial", weights=weights, nfolds=5, type.logistic="modified.Newton", type.measure="auc", trace.it = 1)
-glm.mod=cv.glmnet(x=x, y=label, family="binomial", nfolds=5, type.logistic="modified.Newton", type.measure="auc", trace.it = 1)
+glm.mod=cv.glmnet(x=x, y=label, family="binomial", weights=weights, nfolds=5, 
+                  type.logistic="modified.Newton", type.measure="auc", trace.it = 1)
+#glm.mod=cv.glmnet(x=x, y=label, family="binomial", nfolds=5, 
+#                  type.logistic="modified.Newton", type.measure="auc", trace.it = 1)
 plot(glm.mod)
-coefficients(glm.mod, glm.mod$lambda.min)
-temp.predict=predict(glm.mod, newx = dtest[, colnames(dtrain) %in% featureSet], s=glm.mod$lambda.min)
+#coefficients(glm.mod, glm.mod$lambda.min)
+coeff=coefficients(glm.mod, glm.mod$lambda.1se)
+coeff=setDT(cbind.data.frame("coeff"=coeff[, 1], "feature"=row.names(coeff)), keep.rownames = TRUE)
+fwrite(coeff, file = "coeff.csv", sep=",", append = FALSE, row.names = TRUE)
+#temp.predict=predict(glm.mod, newx = dtest[, colnames(dtrain) %in% featureSet], s=glm.mod$lambda.min)
+temp.predict=predict(glm.mod, newx = dtest[, colnames(dtrain) %in% featureSet], s=glm.mod$lambda.1se)
 temp.predict=as.numeric(temp.predict > 0.5)
 confusionMatrix(as.factor(temp.predict), as.factor(testing.df$collision_id), positive = "1")
 ###############################################################################################################################################

@@ -41,9 +41,9 @@ df %>% str
 
 #filter rows for a complete data set, in that, no features except collision and closure features should be missing
 df=na.omit(setDT(df), cols = c("work_month", "work_day", "district", "county", "route", "activity", "work_duration", "work_length", 
-                        "surface_type", "num_lanes", "road_use", "road_width", "median_type", "barrier_type", "hwy_group", 
-                        "access_type", "terrain_type", "road_speed", "road_adt", "population_code", 
-                        "peak_aadt", "aadt", "truck_aadt", "collision_density11_12"))
+                               "surface_type", "num_lanes", "road_use", "road_width", "median_type", "barrier_type", "hwy_group", 
+                               "access_type", "terrain_type", "road_speed", "road_adt", "population_code", 
+                               "peak_aadt", "aadt", "truck_aadt", "collision_density11_12"))
 
 #check and plot the proportion of response variable classes
 length(which(df$collision_id==1))/length(df$collision_id)

@@ -8,6 +8,7 @@ library(anytime)
 library(e1071)
 library(DMwR)
 library(glmnet)
+library(doParallel)
 
 library(xgboost)
 library(DiagrammeR)
@@ -15,6 +16,9 @@ library(ggplot2)
 library(hrbrthemes)
 library(viridis)
 library(ggrepel)
+library(SHAPforxgboost)
+library(forcats)
+
 
 library(Ckmeans.1d.dp)
 library(devtools)
@@ -113,9 +117,93 @@ label=as.numeric(as.character(training.df$collision_id))
 sumwpos=sum(label==1)
 sumwneg=sum(label==0)
 
-#train the xgboost model
-xgb.mod=xgboost(data = dtrain, label = label, max.depth=10, eta=0.5, nthread=4, 
-                scale_pos_weight=sumwneg/sumwpos, eval_metric="auc", nrounds=250, 
+xgb.grid=expand.grid(nrounds=100, 
+                     eta=seq(0.1, 1, 0.2),
+                     max_depth=c(3, 5, 10),
+                     gamma = 0, 
+                     subsample = 0.1,
+                     min_child_weight = c(1, 3, 5), 
+                     colsample_bytree = 1)
+
+myCl=makeCluster(detectCores()-1, outfile="Log.txt")
+registerDoParallel(myCl)
+
+xgb.control=trainControl(method = "cv",
+                         number = 5,
+                         verboseIter = TRUE,
+                         returnData = FALSE,
+                         returnResamp = "none",
+                         classProbs = TRUE,
+                         allowParallel = TRUE)
+
+xgb.train = train(x = dtrain,
+                  y = factor(label, labels = c("No.Collision", "Collision")),
+                  trControl = xgb.control,
+                  tuneGrid = xgb.grid,
+                  method = "xgbTree",
+                  scale_pos_weight=sumwneg/sumwpos)
+
+xgb.train$bestTune
+
+params=list("eta"=xgb.train$bestTune$eta,
+            "max_depth"=xgb.train$bestTune$max_depth,
+            "gamma"=xgb.train$bestTune$gamma,
+            "min_child_weight"=xgb.train$bestTune$min_child_weight,
+            "nthread"=4,
+            "objective"="binary:logistic")
+
+xgb.crv=xgb.cv(params = params,
+               data = dtrain,
+               nrounds = 500,
+               nfold = 10,
+               label = label,
+               showsd = TRUE,
+               metrics = "auc",
+               stratified = TRUE,
+               verbose = TRUE,
+               print_every_n = 1L,
+               early_stopping_rounds = 50,
+               scale_pos_weight=sumwneg/sumwpos)
+
+xgb.crv$best_iteration
+
+ggplot(xgb.crv$evaluation_log, aes(x=iter))+
+  geom_line(aes(y=train_auc_mean, color="Training accuracy"), size=1.2)+
+  geom_ribbon(aes(y=train_auc_mean, 
+                  ymax=train_auc_mean+train_auc_std,
+                  ymin=train_auc_mean-train_auc_std,
+                  alpha=0.3))+
+  geom_line(aes(y=test_auc_mean, color="Testing accuracy"), size=1.2)+
+  geom_ribbon(aes(y=train_auc_mean, 
+                  ymax=test_auc_mean+test_auc_std,
+                  ymin=test_auc_mean-test_auc_std,
+                  alpha=0.3))+
+  theme_ipsum(axis_title_just = "center")+
+  theme(plot.title = element_blank(),
+        legend.text = element_text(size = 18, family = "Century Gothic", 
+                                   color = "black"),
+        axis.text.x = element_text(angle = 0, hjust = 0.5, size=18, 
+                                   family = "Century Gothic", color = "black"),
+        axis.title.x = element_text(size = 18, family = "Century Gothic", 
+                                    color = "black", margin = margin(15, 0, 0, 0)),
+        axis.text.y = element_text(size=18, family = "Century Gothic", color = "black"),
+        axis.title.y = element_text(size=18, family = "Century Gothic", color = "black",
+                                    margin = margin(0, 15, 0, 0)),
+        axis.line.x = element_line(size=1.2),
+        axis.line = element_line(size=1.2))+
+  xlab("Iteration")+ylab("Avg. accuracy")+
+  scale_alpha(guide="none")+
+  labs(color="")
+
+xgb.mod=xgboost(data = dtrain, 
+                label = label, 
+                max.depth=xgb.train$bestTune$max_depth, 
+                eta=xgb.train$bestTune$eta, 
+                nthread=4, 
+                min_child_weight=xgb.train$bestTune$min_child_weight,
+                scale_pos_weight=sumwneg/sumwpos, 
+                eval_metric="auc", 
+                nrounds=xgb.crv$best_iteration, 
                 objective="binary:logistic")
 
 #evaluate and plot feature importance
@@ -128,6 +216,7 @@ feat.label=c("Closure = 1", "Work length", "Collision density", "Truck AADT",
              "Work day = Wed.", "Route ID = 210", "Work day = Fri.", "Work day = Thu.", 
              "Work day = Mon.", "Work day = Tue.", "Barrier type = E", "Work month = Jan.",
              "Work month = Dec.", "District = 8", "District = 4", "Work month = Aug.")
+
 (gg=xgb.ggplot.importance(importance_matrix = importance[1:30,]))
 gg+theme_ipsum(axis_title_just = "center")+
   theme(plot.title = element_blank(),
@@ -143,6 +232,15 @@ gg+theme_ipsum(axis_title_just = "center")+
   scale_x_discrete(labels=rev(feat.label))+
   xlab("Features")+
   ylab("Average relative contribution to minimization of the objective function")
+
+row_sample=sample(nrow(dtrain), 1000)
+shap_values=shap.values(xgb_model = xgb.mod, X_train = dtrain[row_sample,])
+shap_values$mean_shap_score
+
+shap_long <- shap.prep(shap_contrib = shap_values, X_train = as.data.frame(as.matrix(dtrain[1:1000,])))
+shap.plot.summary.wrap2(shap_score = shap_values$shap_score, X = as.data.frame(as.matrix(dtrain[1:1000,])), top_n = 20, dilute=10)
+shap.plot.summary(shap_long[shap_long$variable %in% importance$Feature[1:20]], dilute=10)
+
 
 #predict the test data
 temp.predict=predict(xgb.mod, dtest)

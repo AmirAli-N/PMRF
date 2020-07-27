@@ -150,6 +150,8 @@ if (length(comboInfo$remove) > 0) {
 #  glmnet(x, y, family="binomial")   
 #}
 
+#lrFuncs$summary<-twoClassSummary
+
 #create cross validation folds
 index=createFolds(y, k = 5, returnTrain = T)
 ctrl=rfeControl(functions = lrFuncs, method = "repeatedcv", index=index, repeats = 1, verbose = TRUE)
@@ -162,6 +164,7 @@ ctrl=rfeControl(functions = lrFuncs, method = "repeatedcv", index=index, repeats
 
 #recursive feature elimination
 rfe.mod=rfe(preprocess.df, as.factor(y), sizes = c(1:61), rfeControl = ctrl, metric = "Accuracy")
+rfe.mod=rfe(preprocess.df, as.factor(y), sizes = c(1:61), rfeControl = ctrl, metric = "ROC")
 
 predictors(rfe.mod)
 rfe.mod$fit

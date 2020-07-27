@@ -18,6 +18,7 @@ library(viridis)
 library(ggrepel)
 library(SHAPforxgboost)
 library(forcats)
+library(Boruta)
 
 
 library(Ckmeans.1d.dp)
@@ -109,6 +110,13 @@ test.df=test.df[,-c("collision_num_killed", "collision_num_injured", "collision_
 ###############################################################################################################################################
 ###############################################################################################################################################
 #prepare sparse matrices for xgboost
+preprocess.mod=preProcess(temp.df, method = c("center", "scale"), rangeBounds = c(0,1))
+temp.df=predict(preprocess.mod, temp.df)
+test.df=predict(preprocess.mod, test.df)
+
+temp.test=setDF(test.df) %>% filter(truck_aadt >=-1 & truck_aadt<=1)
+test.df=temp.test
+
 dtest=sparse.model.matrix(collision_id~.-1, data = data.frame(test.df))
 dtrain=sparse.model.matrix(collision_id~.-1, temp.df)
 label=as.numeric(as.character(training.df$collision_id))
@@ -141,7 +149,8 @@ xgb.train = train(x = dtrain,
                   trControl = xgb.control,
                   tuneGrid = xgb.grid,
                   method = "xgbTree",
-                  scale_pos_weight=sumwneg/sumwpos)
+                  scale_pos_weight=sumwneg/sumwpos,
+                  tree_method="gpu_hist")
 
 xgb.train$bestTune
 
@@ -154,11 +163,11 @@ params=list("eta"=xgb.train$bestTune$eta,
 
 xgb.crv=xgb.cv(params = params,
                data = dtrain,
-               nrounds = 500,
-               nfold = 10,
+               nrounds = 100,
+               nfold = 5,
                label = label,
                showsd = TRUE,
-               metrics = "auc",
+               metrics = list("auc", "rmse", "logloss"),
                stratified = TRUE,
                verbose = TRUE,
                print_every_n = 1L,
@@ -206,14 +215,32 @@ xgb.mod=xgboost(data = dtrain,
                 nrounds=xgb.crv$best_iteration, 
                 objective="binary:logistic")
 
+xgb.mod=xgboost(data = dtrain, 
+                label = label, 
+                max.depth=10, 
+                eta=0.3, 
+                nthread=4, 
+                min_child_weight=1,
+                scale_pos_weight=sumwneg/sumwpos, 
+                eval_metric="auc", 
+                eval_metric="rmse", 
+                eval_metric="logloss",
+                gamma=5,
+                nrounds=103, 
+                objective="binary:logistic",
+                max_delta_step=1,
+                tree_method="hist",
+                lambda=1,
+                alpha=1)
+
 #evaluate and plot feature importance
 importance=xgb.importance(feature_names = colnames(dtrain), model = xgb.mod)
 feat.label=importance$Feature[1:30]
 feat.label=c("Closure = 1", "Work length", "Collision density", "Truck AADT",
-             "ADT", "Closure coverage", "Peak AADT", "Work duration", "Closure length",
+             "ADT", "Closure length", "Closure coverage", "Work duration", "Peak AADT",
              "AADT", "Design speed", "Route ID = 10", "County = SJ", "Activity code = M90000",
-             "Road width", "Surface type = C", "Work month = Sep.", "Work month = Jul.", 
-             "Work day = Wed.", "Route ID = 210", "Work day = Fri.", "Work day = Thu.", 
+             "Road width", "Work day = Wed.", "Surface type = C", "Work month = Sep.", "Work month = Jul.", 
+              "Route ID = 210", "Work day = Fri.", "Work day = Thu.", 
              "Work day = Mon.", "Work day = Tue.", "Barrier type = E", "Work month = Jan.",
              "Work month = Dec.", "District = 8", "District = 4", "Work month = Aug.")
 
@@ -233,13 +260,40 @@ gg+theme_ipsum(axis_title_just = "center")+
   xlab("Features")+
   ylab("Average relative contribution to minimization of the objective function")
 
-row_sample=sample(nrow(dtrain), 1000)
-shap_values=shap.values(xgb_model = xgb.mod, X_train = dtrain[row_sample,])
+shap_values=shap.values(xgb_model = xgb.mod, X_train = dtest)
 shap_values$mean_shap_score
+rm_col=names(shap_values$mean_shap_score)[which(shap_values$mean_shap_score==0)]
+train.df=as.data.frame(as.matrix(dtrain))
+train.df=train.df[,!names(train.df)%in%rm_col]
+train.ind=createDataPartition(temp.df$collision_id, times = 1, p=0.5, list = FALSE)
+train.df=train.df[train.ind,]
+label=label[as.numeric(rownames(train.df))]
 
-shap_long <- shap.prep(shap_contrib = shap_values, X_train = as.data.frame(as.matrix(dtrain[1:1000,])))
-shap.plot.summary.wrap2(shap_score = shap_values$shap_score, X = as.data.frame(as.matrix(dtrain[1:1000,])), top_n = 20, dilute=10)
-shap.plot.summary(shap_long[shap_long$variable %in% importance$Feature[1:20]], dilute=10)
+xgb.brouta=Boruta(train.df,
+                  y=as.numeric(as.factor(label))-1,
+                  maxRuns=20, 
+                  doTrace=2,
+                  holdHistory=TRUE,
+                  getImp=getImpXgboost,
+                  max.depth=10, 
+                  eta=1, 
+                  nthread=4, 
+                  min_child_weight=1,
+                  scale_pos_weight=sumwneg/sumwpos, 
+                  eval_metric="auc", 
+                  eval_metric="rmse", 
+                  eval_metric="logloss",
+                  gamma=0,
+                  nrounds=103, 
+                  objective="binary:logistic",
+                  max_delta_step=1,
+                  tree_method="hist",
+                  lambda=0,
+                  alpha=0)
+
+pp=shap.plot.summary.wrap2(shap_score = shap_values$shap_score, 
+                        X = as.data.frame(as.matrix(dtest)), 
+                        top_n = 20, dilute=10)
 
 
 #predict the test data

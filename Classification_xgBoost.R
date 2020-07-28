@@ -296,14 +296,102 @@ boruta.df=attStats(xgb.brouta)
 feature.imp=row.names(boruta.df)[which(boruta.df$decision!="Rejected")]
 boruta.imp.df=as.data.frame(xgb.brouta$ImpHistory)
 boruta.imp.df=boruta.imp.df[,names(boruta.imp.df)%in%feature.imp]
+boruta.imp.df=melt(boruta.imp.df)
+boruta.imp.df=cbind.data.frame(boruta.imp.df, 
+                               decision=boruta.df$decision[match(boruta.imp.df$variable, row.names(boruta.df))])
 
+boruta.feat=c("Work duration", "Work length", "ADT", "Peak AADT",
+              "AADT", "Truck AADT", "Collision density", "Lane closure = 1", 
+              "Closure coverage", "Closure length")
+fac=with(boruta.imp.df, reorder(variable, value, median, order = TRUE))
+boruta.imp.df$variable=factor(boruta.imp.df$variable, levels = levels(fac))
+ggplot(data = boruta.imp.df, aes(x=variable, y=value, fill=decision))+
+  geom_boxplot()+
+  coord_flip()+
+  theme_ipsum(axis_title_just = "center")+
+  theme(plot.title = element_blank(),
+        axis.text.x = element_text(angle = 0, hjust = 0.5, size=18, 
+                                   family = "Century Gothic", color = "black"),
+        axis.title.x = element_text(size = 18, family = "Century Gothic", color = "black",
+                                    margin = margin(15, 0, 0, 0)),
+        axis.text.y = element_text(size=18, family = "Century Gothic", color = "black"),
+        axis.title.y = element_text(size=18, family = "Century Gothic", color = "black",
+                                    margin = margin(0, 15, 0, 0)),
+        axis.line.x = element_line(size=1.2),
+        axis.line.y = element_line(size=1.2),
+        legend.title = element_text(size=18, family = "Century Gothic", color = "black"),
+        legend.text = element_text(size=18, family = "Century Gothic", color = "black"),
+        legend.position = "top")+
+  scale_x_discrete(labels=boruta.feat)+
+  xlab("Features")+
+  ylab("Boruta Importance")
 
-ggplot(data = boruta.imp.df, aes(x=))
+shap.feat=unique(boruta.imp.df$variable)
+#shap_values.boruta=shap.values(xgb_model = xgb.mod, X_train = dtest)
+X=as.matrix(dtest)[, shap.feat]
+preprocess.mod=preProcess(X, method = "scale", rangeBounds = c(0, 1))
+X=predict(preprocess.mod, X)
+X=as.data.frame(X)
 
-pp=shap.plot.summary.wrap2(shap_score = shap_values$shap_score, 
-                        X = as.data.frame(as.matrix(dtest)), 
-                        top_n = 20, dilute=10)
+hist(X$closure_length)
 
+inliers=which(X$work_duration<=6 & X$work_duration>=-1 &
+              X$work_length<=6 & X$work_length>=-1 &
+              X$road_adt<=3 & X$road_adt>=-1 &
+              X$peak_aadt<=4 & X$peak_aadt>=-1 &
+              X$aadt<=3 & X$aadt>=-1 &
+              X$truck_aadt<=3 & X$truck_aadt>=-1 &
+              X$collision_density11_12<=3 & X$collision_density11_12>=-1 &
+              X$closure_coverage<=3 & X$closure_coverage>=-1 &
+              X$closure_length<=5 & X$closure_length>=-1)
+
+pp=shap.plot.summary.wrap2(shap_score = as.data.frame(as.matrix(shap_values$shap_score))[inliers, shap.feat], 
+                        X = X[inliers,],
+                        dilute=20)
+shap.names=c("Truck AADT", "Work duration", "Work length", "Closure length",
+             "Peak AADT", "Collision density", "ADT", "Closure coverage",
+             "AADT", "Lane closure = 1")
+pp+theme_ipsum(axis_title_just = "center")+
+  theme(plot.title = element_blank(),
+        axis.text.x = element_text(angle = 0, hjust = 0.5, size=18, 
+                                   family = "Century Gothic", color = "black"),
+        axis.title.x = element_text(size = 18, family = "Century Gothic", color = "black",
+                                    margin = margin(15, 0, 0, 0)),
+        axis.text.y = element_text(size=18, family = "Century Gothic", color = "black"),
+        axis.title.y = element_text(size=18, family = "Century Gothic", color = "black",
+                                    margin = margin(0, 15, 0, 0)),
+        axis.line.x = element_line(size=1.2),
+        axis.line.y = element_line(size=1.2),
+        legend.title = element_text(size=18, family = "Century Gothic", color = "black"),
+        legend.text = element_text(size=18, family = "Century Gothic", color = "black"),
+        legend.position = "right")+
+  scale_x_discrete(labels=shap.names)+
+  xlab("Features")+
+  ylab("Shapley Values")+
+  guides(colour=guide_colorbar(title = "Feature Value",
+                               title.position = "top",
+                               label.position = "left",
+                               barwidth = 0.2,
+                               barheight = 30))
+  
+
+xgb.mod=xgboost(data = dtrain, 
+                label = label, 
+                max.depth=10, 
+                eta=0.3, 
+                nthread=4, 
+                min_child_weight=1,
+                scale_pos_weight=sumwneg/sumwpos, 
+                eval_metric="auc", 
+                eval_metric="rmse", 
+                eval_metric="logloss",
+                gamma=5,
+                nrounds=103, 
+                objective="binary:logistic",
+                max_delta_step=1,
+                tree_method="hist",
+                lambda=1,
+                alpha=1)
 
 #predict the test data
 temp.predict=predict(xgb.mod, dtest)

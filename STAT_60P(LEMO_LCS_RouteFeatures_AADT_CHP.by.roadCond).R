@@ -110,6 +110,33 @@ ggplot(df.temp, aes(x=family, y=freqC/freqW, fill=family))+
   xlab("IMMS family grouping")+
   ylab("Fraction of work orders with lane closure")
 
+#############################
+## lane closure by number of collision
+############################
+df.temp=df[,c("wono", "closure_id", "collision_id")]
+df.temp$closure_id=ifelse(is.na(df.temp$closure_id), 0, 1)
+df.temp$collision_id=ifelse(is.na(df.temp$collision_id), 0, 1)
+
+df.temp=df.temp[,.(count=length(wono)), by=.(closure_id, collision_id)]
+
+ggplot(df.temp, aes(x=closure_id, y=count, fill=factor(collision_id)))+
+  geom_bar(position="stack", stat = "identity")
+
+df.temp=df.temp[collision_id!=0,]
+ggplot(df.temp, aes(x=closure_id, y=count))+
+  geom_bar(stat="identity", fill="blue")+
+  theme_ipsum(axis_title_just = 'center')+
+  theme(legend.position = 'none',
+        axis.text.x = element_text(size = 18, family = "Century Gothic", hjust = 0.5, color = "black"),
+        axis.title.x = element_blank(),
+        axis.line.x = element_line(size=1.2),
+        axis.line.y = element_line(size=1.2),
+        axis.text.y = element_text(size = 18, family = "Century Gothic", color = "black"),
+        axis.title.y = element_text(margin=margin(0, 15, 0, 0), size = 18, family = "Century Gothic",
+                                    color = "black"))+
+  scale_x_continuous(breaks=c(0, 1), labels=c("Work orders w/o \nlane closure",
+                            "Work orders with \nlane closure"))+
+  ylab("Number of collisions")
 ############################
 ## work lenght by number of collision
 ############################
@@ -127,7 +154,9 @@ ggplot(df.temp, aes(x=collision_id, y=work_length, fill=collision_id))+
         axis.title.x = element_blank(),
         axis.text.y = element_text(size = 18, family = "Century Gothic", color = "black"),
         axis.title.y = element_text(margin=margin(0, 15, 0, 0), size = 18, 
-                                    family = "Century Gothic", color = "black"))+
+                                    family = "Century Gothic", color = "black"),
+        axis.line.x = element_line(size=1.2),
+        axis.line.y = element_line(size = 1.2))+
   ylab("Work length")
 
 ############################
@@ -147,5 +176,28 @@ ggplot(df.temp, aes(x=collision_id, y=collision_density11_12, fill=collision_id)
         axis.title.x = element_blank(),
         axis.text.y = element_text(size = 18, family = "Century Gothic", color = "black"),
         axis.title.y = element_text(margin=margin(0, 15, 0, 0), size = 18, 
-                                    family = "Century Gothic", color = "black"))+
+                                    family = "Century Gothic", color = "black"),
+        axis.line.x = element_line(size=1.2),
+        axis.line.y = element_line(size = 1.2))+
   ylab("Collision density")
+
+############################
+## collision by truck aadt
+############################
+df.temp=df[, c("collision_id", "truck_aadt")]
+df.temp$collision_id=ifelse(is.na(df$collision_id), "0", "1")
+
+ggplot(df.temp, aes(x=collision_id, y=truck_aadt, fill=collision_id))+
+  geom_violin(trim = TRUE, scale = "width", na.rm = TRUE)+
+  #scale_y_continuous(limits = c(0, 450))+
+  scale_x_discrete(labels=c("No collision", "Collision"))+
+  theme_ipsum(axis_title_just = 'center')+
+  theme(legend.position = 'none',
+        axis.text.x = element_text(size = 18, family = "Century Gothic", color = "black"),
+        axis.title.x = element_blank(),
+        axis.text.y = element_text(size = 18, family = "Century Gothic", color = "black"),
+        axis.title.y = element_text(margin=margin(0, 15, 0, 0), size = 18, 
+                                    family = "Century Gothic", color = "black"),
+        axis.line.x = element_line(size=1.2),
+        axis.line.y = element_line(size = 1.2))+
+  ylab("Truck AADT")

@@ -231,5 +231,5 @@ names(testing.df)[which(names(testing.df)=="collision_id.1")]="y"
 glm.data=data.frame(x[, colnames(x) %in% rfe.mod$optVariables[1:54]])
 glm.mod=train(as.factor(y)~., data = cbind(glm.data, y) , method="glm")
 summary(glm.mod$finalModel)
-predicted.glm = predict(rfe.mod, testing.df)
+predicted.glm = predict(rfe.mod.auc, testing.df)
 confusionMatrix(predicted.glm$pred, as.factor(testing.df$y), positive = "1")

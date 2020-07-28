@@ -171,9 +171,19 @@ registerDoParallel(my_cluster)
 elastic.mod=cv.glmnet(x=x, y=y, family="binomial", nfolds=5, 
                       type.logistic="modified.Newton", type.measure="class", 
                       trace.it = 1, parallel = TRUE)
+
+elastic.mod.auc=cv.glmnet(x=x, y=y, family="binomial", nfolds=5, 
+                          type.logistic="modified.Newton", type.measure="auc", 
+                          trace.it = 1, parallel = TRUE)
+
+elastic.mod.dev=cv.glmnet(x=x, y=y, family="binomial", nfolds=5, 
+                      type.logistic="modified.Newton", type.measure="deviance", 
+                      trace.it = 1, parallel = TRUE)
+
+
 stopCluster(my_cluster)
 
-plot(elastic.mod)
+plot(elastic.mod.auc)
 elastic.mod$cvm[which(elastic.mod$lambda==elastic.mod$lambda.1se)]
 elastic.mod$nzero[which(elastic.mod$lambda==elastic.mod$lambda.1se)]
 elastic.mod$cvm[which(elastic.mod$lambda==elastic.mod$lambda.min)]
@@ -181,7 +191,7 @@ elastic.mod$nzero[which(elastic.mod$lambda==elastic.mod$lambda.min)]
 num.label=elastic.mod$nzero
 num.label[seq_along(num.label) %% 2 == 0]=""
 ggplot(data=data.frame(elastic.mod$cvm, elastic.mod$lambda, elastic.mod$nzero), 
-       aes(x=log(elastic.mod.lambda), y=elastic.mod.cvm))+
+       aes(x=log(elastic.mod.lambda), y=1-elastic.mod.cvm))+
   geom_line(size=1)+
   geom_vline(xintercept = log(elastic.mod$lambda.1se), linetype="dashed")+
   geom_vline(xintercept = log(elastic.mod$lambda.min), linetype="dashed")+

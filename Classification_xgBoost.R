@@ -19,6 +19,7 @@ library(ggrepel)
 library(SHAPforxgboost)
 library(forcats)
 library(Boruta)
+library(reshape2)
 
 
 library(Ckmeans.1d.dp)
@@ -290,6 +291,14 @@ xgb.brouta=Boruta(train.df,
                   tree_method="hist",
                   lambda=0,
                   alpha=0)
+
+boruta.df=attStats(xgb.brouta)
+feature.imp=row.names(boruta.df)[which(boruta.df$decision!="Rejected")]
+boruta.imp.df=as.data.frame(xgb.brouta$ImpHistory)
+boruta.imp.df=boruta.imp.df[,names(boruta.imp.df)%in%feature.imp]
+
+
+ggplot(data = boruta.imp.df, aes(x=))
 
 pp=shap.plot.summary.wrap2(shap_score = shap_values$shap_score, 
                         X = as.data.frame(as.matrix(dtest)), 

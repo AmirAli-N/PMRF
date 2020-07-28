@@ -1,6 +1,7 @@
 setwd("//ahmct-065/teams/PMRF/Amir/")
 
 library(data.table)
+library(plyr)
 library(dplyr)
 library(tidyr)
 library(caret)
@@ -139,41 +140,60 @@ if (length(comboInfo$remove) > 0) {
 ###################################################################################################################
 ###################################################################################################################
 ######################################################################################recursive feature elimination
-##set the regression function to logistic:default
-# lrFuncs$fit<-function (x, y, first, last, ...){   
-#   tmp <- as.data.frame(x)   
-#   tmp$y <- y   
-#   glm(y ~ ., data = tmp,family="binomial")   
+#summary function for auc score
+lrFuncs$summary=twoClassSummary
+
+#summary function for logloss
+# LogLoss <- function (data, lev = NULL, model = NULL) 
+# { 
+#   obs <- data[, "obs"]
+#   cls <- levels(obs) #find class names
+#   probs <- data[, cls[2]] #use second class name
+#   probs <- pmax(pmin(as.numeric(probs), 1 - 1e-15), 1e-15) #bound probability
+#   logPreds <- log(probs)        
+#   log1Preds <- log(1 - probs)
+#   real <- (as.numeric(data$obs) - 1)
+#   out <- c(mean(real * logPreds + (1 - real) * log1Preds)) * -1
+#   names(out) <- c("LogLoss")
+#   out
 # }
-
-#lrFuncs$fit<-function (x, y, first, last, ...){   
-#  glmnet(x, y, family="binomial")   
-#}
-
-#lrFuncs$summary<-twoClassSummary
+# lrFuncs$summary=LogLoss
 
 #create cross validation folds
 index=createFolds(y, k = 5, returnTrain = T)
 ctrl=rfeControl(functions = lrFuncs, method = "repeatedcv", index=index, repeats = 1, verbose = TRUE)
 
-#split independent and dependent variables
-# x=balanced.df[,-which(colnames(balanced.df)=="collision_id.1")]
-# x=as.data.frame(x)
-# y=balanced.df[,"collision_id.1"]
-
-
 #recursive feature elimination
-rfe.mod=rfe(preprocess.df, as.factor(y), sizes = c(1:61), rfeControl = ctrl, metric = "Accuracy")
-rfe.mod=rfe(preprocess.df, as.factor(y), sizes = c(1:61), rfeControl = ctrl, metric = "ROC")
+#rfe.mod.acc=rfe(x, as.factor(y), sizes = c(1:61), rfeControl = ctrl, metric = "Accuracy", maximize=TRUE)
+rfe.mod.auc=rfe(x, as.factor(y), sizes = c(1:61), rfeControl = ctrl, metric = "ROC", maximize = TRUE)
+#rfe.mod.log=rfe(x, as.factor(y), sizes = c(1:61), rfeControl = ctrl, metric = "LogLoss", maximize = FALSE)
 
-predictors(rfe.mod)
-rfe.mod$fit
+#predictors(rfe.mod.auc)
+predictors(rfe.mod.auc)
+#predictors(rfe.mod.log)
+
+#rfe.mod.acc$fit
+rfe.mod.auc$fit
+#rfe.mod.log$fit
+
+###############################################
+imp=varImp(rfe.mod.auc, scale=TRUE)
+summary(rfe.mod.auc)
+rfe.mod.auc
+coeff=data.frame(coefficients(rfe.mod$fit))
+###############################################
+
 trellis.par.set(caretTheme())
-plot(rfe.mod, type=c("g", "o"))
+#plot(rfe.mod.acc, type=c("g", "o"))
+plot(rfe.mod.auc, type=c("g", "o"))
+#plot(rfe.mod.log, type=c("g", "o"))
 
-ggplot(rfe.mod$results, aes(x=Variables, y=Accuracy, fill="black"))+
+#ggplot(as.data.frame(rfe.mod.acc$results), aes(x=Variables, y=Accuracy, fill="black"))+
+ggplot(as.data.frame(rfe.mod.auc$results), aes(x=Variables, y=ROC))+
+#ggplot(as.data.frame(rfe.mod.log$results), aes(x=Variables, y=LogLoss))
   geom_line(size=1)+
   geom_point(size=2.5)+
+  geom_vline(xintercept = rfe.mod.auc$bestSubset, linetype="dashed")+
   theme_ipsum(axis_title_just = 'center')+
   scale_x_continuous(breaks = seq(0, 60, 10), labels = seq(0, 60, 10), expand = c(0, 5))+
   theme(axis.title.x = element_text(size = 18, family = "Century Gothic", colour = "black",
@@ -184,18 +204,23 @@ ggplot(rfe.mod$results, aes(x=Variables, y=Accuracy, fill="black"))+
         axis.text.y = element_text(size=18, family = "Century Gothic", color = "black"),
         axis.line.x = element_line(size=1.5, colour = "black"),
         axis.line.y = element_line(size=1.5, colour = "black"),
-        legend.position = "none")+
-  geom_label_repel(data=data.frame(Variables=54, Accuracy=0.9342), 
-                   label="Num. of Variables = 54\n Acc: 0.9342\n Kappa=0.8659",
-                   nudge_y = -.02, size = 6,
-                   arrow = arrow(length = unit(0.03, "npc"), type = "closed", ends = "first"),
-                   family="Century Gothic")+
-  xlab("Number of Variables")
+        legend.position = "none",
+        panel.grid.minor = element_blank(), panel.grid.major = element_blank())+
+  #geom_label_repel(data=data.frame(Variables=61, Accuracy=0.93),
+  geom_label(data=data.frame(Variables=61, ROC=0.9709),
+  #geom_label(data=data.frame(Variables=61, LogLoss=0.21)
+                   #label="Num. of Variables = 61\n Acc: 0.93\n Kappa=0.86",
+                   label="Num. of Variables = 61\n AUC: 0.97",
+                   #label="Num. of Variables = 61\n LogLoss: 0.21",
+                   nudge_y = -.02, nudge_x= -12, size = 6, family="Century Gothic")+
+  xlab("Number of Variables")+
+  #ylab("Accuracy")
+  ylab("AUC")
+  #ylab("Log loss function")
 
-imp=varImp(rfe.mod, scale=TRUE)
-summary(rfe.mod)
-rfe.mod
-coeff=data.frame(coefficients(rfe.mod$fit))
+#AIC(rfe.mod.acc$fit)
+AIC(rfe.mod.auc$fit)
+#AIC(rfe.mod.log$fit)
 ####################################################################################################################
 ####################################################################################################################
 ######################################################################################################### Prediction

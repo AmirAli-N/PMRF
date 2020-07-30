@@ -174,7 +174,7 @@ elastic.mod=cv.glmnet(x=x, y=y, family="binomial", nfolds=5,
 
 elastic.mod.auc=cv.glmnet(x=x, y=y, family="binomial", nfolds=5, 
                           type.logistic="modified.Newton", type.measure="auc", 
-                          trace.it = 1, parallel = TRUE)
+                          trace.it = 1, parallel = TRUE, alpha=0.7)
 
 elastic.mod.dev=cv.glmnet(x=x, y=y, family="binomial", nfolds=5, 
                       type.logistic="modified.Newton", type.measure="deviance", 
@@ -184,17 +184,21 @@ elastic.mod.dev=cv.glmnet(x=x, y=y, family="binomial", nfolds=5,
 stopCluster(my_cluster)
 
 plot(elastic.mod.auc)
-elastic.mod$cvm[which(elastic.mod$lambda==elastic.mod$lambda.1se)]
-elastic.mod$nzero[which(elastic.mod$lambda==elastic.mod$lambda.1se)]
-elastic.mod$cvm[which(elastic.mod$lambda==elastic.mod$lambda.min)]
-elastic.mod$nzero[which(elastic.mod$lambda==elastic.mod$lambda.min)]
-num.label=elastic.mod$nzero
+elastic.mod.auc$cvm[which(elastic.mod.auc$lambda==elastic.mod.auc$lambda.1se)]
+elastic.mod.auc$nzero[which(elastic.mod.auc$lambda==elastic.mod.auc$lambda.1se)]
+
+elastic.mod.auc$cvm[which(elastic.mod.auc$lambda==elastic.mod.auc$lambda.min)]
+elastic.mod.auc$nzero[which(elastic.mod.auc$lambda==elastic.mod.auc$lambda.min)]
+
+num.label=elastic.mod.auc$nzero
 num.label[seq_along(num.label) %% 2 == 0]=""
-ggplot(data=data.frame(elastic.mod$cvm, elastic.mod$lambda, elastic.mod$nzero), 
-       aes(x=log(elastic.mod.lambda), y=1-elastic.mod.cvm))+
+num.label[!seq(1, length(num.label), 1) %in% seq(1, length(num.label), 6)]=""
+
+ggplot(data=data.frame(elastic.mod.auc$cvm, elastic.mod.auc$lambda, elastic.mod.auc$nzero), 
+       aes(x=log(elastic.mod.auc.lambda), y=elastic.mod.auc.cvm))+
   geom_line(size=1)+
-  geom_vline(xintercept = log(elastic.mod$lambda.1se), linetype="dashed")+
-  geom_vline(xintercept = log(elastic.mod$lambda.min), linetype="dashed")+
+  geom_vline(xintercept = log(elastic.mod.auc$lambda.1se), linetype="dashed")+
+  geom_vline(xintercept = log(elastic.mod.auc$lambda.min), linetype="dashed")+
   geom_point(size=2.5)+
   theme_ipsum(axis_title_just = 'center')+
   scale_x_continuous(breaks = seq(-9, 0, 1), labels = seq(-9, 0, 1),
@@ -216,18 +220,18 @@ ggplot(data=data.frame(elastic.mod$cvm, elastic.mod$lambda, elastic.mod$nzero),
         legend.position = "none",
         panel.grid.minor = element_blank(), panel.grid.major = element_blank())+
   xlab(expression(paste("ln(", lambda, ")",sep = "")))+
-  ylab(expression(1-"Accuracy"))+
-  geom_label(data=data.frame(elastic.mod.lambda=elastic.mod$lambda.1se, elastic.mod.cvm=0.3), 
-             label="Num. of Variables = 59\n 1-Acc: 0.0862\n lamba=0.0007",
-             nudge_y = -.05, nudge_x = 0.5, size = 6,
+  ylab("AUC")+
+  geom_label(data=data.frame(elastic.mod.auc.lambda=elastic.mod.auc$lambda.1se, elastic.mod.auc.cvm=0.8), 
+             label="Num. of Variables = 59\n AUC: 0.97\n lamba=0.0007",
+             nudge_y = .01, nudge_x = 1.5, size = 6,
              family="Century Gothic")+
-  geom_label(data=data.frame(elastic.mod.lambda=elastic.mod$lambda.min, elastic.mod.cvm=0.4), 
-             label="Num. of Variables = 60\n 1-Acc: 0.058\n lamba=0.0001",
-             nudge_y = -.05, nudge_x = 0.5, size = 6,
+  geom_label(data=data.frame(elastic.mod.auc.lambda=elastic.mod.auc$lambda.min, elastic.mod.auc.cvm=0.7), 
+             label="Num. of Variables = 60\n AUC: 0.97\n lamba=0.0001",
+             nudge_y = -.02, nudge_x = 1.5, size = 6,
              family="Century Gothic")
 
-coefficients(elastic.mod, elastic.mod$lambda.min)
-summary(elastic.mod$glmnet.fit)
+coefficients(elastic.mod.auc, elastic.mod.auc$lambda.min)
+summary(elastic.mod.auc$glmnet.fit)
 ########################################################
 
 ## using the glmnet library
@@ -252,13 +256,14 @@ coefficients(elastic.mod, elastic.mod$lambda.min)
 ####################################################################################################################
 ####################################################################################################################
 ######################################################################################################### Prediction
-
+testing.df=fread(file="./bin/test(collision2class)_by.roadCondition.csv", sep=",", header=TRUE)
 #testing.df=fread(file="./bin/test(severity3class)_by.roadCondition_closureTime.csv", sep=",", header=TRUE)
-testing.df=fread(file="./bin/test(severity4class)_by.roadCondition_workOrderDate.csv", sep=",", header=TRUE)
-y_test=unlist(testing.df[,"collision_severity"])
+#testing.df=fread(file="./bin/test(severity4class)_by.roadCondition_workOrderDate.csv", sep=",", header=TRUE)
+#y_test=unlist(testing.df[,"collision_severity"])
+y_test=unlist(testing.df[,"collision_id.1"])
 
-test.matrix=setDF(testing.df)[, names(testing.df) %in% colnames(training.df)]
+test.matrix=setDF(testing.df)[, names(testing.df) %in% colnames(x)]
 test.matrix=data.matrix(test.matrix)
 
-predicted.net=predict(elastic.mod, test.matrix, s=elastic.mod$lambda.min, type="class")
+predicted.net=predict(elastic.mod.auc, test.matrix, s=elastic.mod$lambda.min, type="class")
 confusionMatrix(as.factor(predicted.net), as.factor(y_test))

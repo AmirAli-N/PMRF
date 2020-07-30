@@ -60,7 +60,7 @@ cleanUp_Dataset=function(df, cols){
   
   if ("num_lanes" %in% cols){
     unique(df$num_lanes)
-    df$num_lanes=as.numeric(df$num_lanes)
+    df$num_lanes=as.factor(df$num_lanes)
     final_cols=c(final_cols, "num_lanes")
   }
   
@@ -203,7 +203,7 @@ cleanUp_Dataset=function(df, cols){
   if ("closure_lanes" %in% cols){
     unique(df$closure_lanes)
     #df$closure_lanes[which(is.na(df$closure_lanes))]=0
-    df$closure_lanes=as.numeric(df$closure_lanes)
+    df$closure_lanes=as.factor(df$closure_lanes)
     final_cols=c(final_cols, "closure_lanes")
   }
   
@@ -260,17 +260,17 @@ cleanUp_Dataset=function(df, cols){
   }
   
   if ("collision_num_killed" %in% cols){
-    df$collision_num_killed=as.numeric(df$collision_num_killed)
+    df$collision_num_killed=as.factor(df$collision_num_killed)
     final_cols=c(final_cols, "collision_num_killed")
   }
   
   if ("collision_num_injured" %in% cols){
-    df$collision_num_injured=as.numeric(df$collision_num_injured)
+    df$collision_num_injured=as.factor(df$collision_num_injured)
     final_cols=c(final_cols, "collision_num_injured")
   }
     
   if ("collision_party_count" %in% cols){  
-    df$collision_party_count=as.numeric(df$collision_party_count)
+    df$collision_party_count=as.factor(df$collision_party_count)
     final_cols=c(final_cols, "collision_party_count")
   }
   

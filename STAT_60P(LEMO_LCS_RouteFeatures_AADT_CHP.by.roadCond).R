@@ -123,8 +123,8 @@ ggplot(df.temp, aes(x=closure_id, y=count, fill=factor(collision_id)))+
   geom_bar(position="stack", stat = "identity")
 
 df.temp=df.temp[collision_id!=0,]
-ggplot(df.temp, aes(x=closure_id, y=count))+
-  geom_bar(stat="identity", fill="blue")+
+ggplot(df.temp, aes(x=closure_id, y=count, fill=closure_id))+
+  geom_bar(stat="identity")+
   theme_ipsum(axis_title_just = 'center')+
   theme(legend.position = 'none',
         axis.text.x = element_text(size = 18, family = "Century Gothic", hjust = 0.5, color = "black"),
@@ -145,7 +145,7 @@ df.temp=df[, c("collision_id", "work_length")]
 df.temp$collision_id=ifelse(is.na(df$collision_id), "0", "1")
 
 ggplot(df.temp, aes(x=collision_id, y=work_length, fill=collision_id))+
-  geom_violin(trim = TRUE, scale = "width", na.rm = TRUE)+
+  geom_violin(trim = TRUE, scale = "area", na.rm = TRUE)+
   scale_y_continuous(limits = c(0, 100))+
   scale_x_discrete(labels=c("No collision", "Collision"))+
   theme_ipsum(axis_title_just = 'center')+
@@ -167,7 +167,7 @@ df.temp=df[, c("collision_id", "collision_density11_12")]
 df.temp$collision_id=ifelse(is.na(df$collision_id), "0", "1")
 
 ggplot(df.temp, aes(x=collision_id, y=collision_density11_12, fill=collision_id))+
-  geom_violin(trim = TRUE, scale = "width", na.rm = TRUE)+
+  geom_violin(trim = TRUE, scale = "area", na.rm = TRUE)+
   scale_y_continuous(limits = c(0, 450))+
   scale_x_discrete(labels=c("No collision", "Collision"))+
   theme_ipsum(axis_title_just = 'center')+

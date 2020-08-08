@@ -15,6 +15,7 @@ library(viridis)
 library(ggrepel)
 library(forcats)
 library(magrittr)
+library(ordinal)
 
 set.seed(123)
 
@@ -176,6 +177,7 @@ y_test_class=droplevels.factor(y_test_class)
 x_train=as.matrix(x_train, "dgCMatrix")
 ord.mod=glmnetcr(x_train, 
                  y_class,
+                 weights = w,
                  method = "backward", 
                  standardize = TRUE, 
                  type.logistic = "modified.Newton", 
@@ -185,9 +187,15 @@ ord.mod=glmnetcr(x_train,
                  alpha = 1,
                  maxit = 200)
 
+ord.link=clm(y_class~. , data = data.frame(x_train), weights = w,
+             link = "logit", doFit = TRUE)
+
 print(ord.mod)
 best.fit=select.glmnetcr(ord.mod, which = "BIC")
 coef(ord.mod, s=best.fit)
 
 pred=predict(ord.mod, newx = x_test)
+pred=predict(ord.link, newdata=test, type="class")
 confusionMatrix(as.factor(pred$class[, best.fit]), as.factor(y_test_class))
+confusionMatrix(as.factor(pred$fit), as.factor(y_test_class))
+                

@@ -7,6 +7,7 @@ library(caret)
 library(anytime)
 library(e1071)
 library(DMwR)
+library(unbalanced)
 library(glmnet)
 library(MASS)
 library(ordinalNet)
@@ -16,8 +17,8 @@ library(relimp)
 set.seed(123)
 
 #df=fread(file="./bin/LEMO_CHP.by.roadCond_workOrderDate.csv", sep=",", header=TRUE)
-df=fread(file="./bin/LEMO_CHP.by.roadCond_closureTime.csv", sep=",", header=TRUE)
-#df=fread(file="./bin/LEMO_CHP.by.roadCond.csv", sep=",", header=TRUE)
+#df=fread(file="./bin/LEMO_CHP.by.roadCond_closureTime.csv", sep=",", header=TRUE)
+df=fread(file="./bin/LEMO_CHP.by.roadCond.csv", sep=",", header=TRUE)
 df[df==""]=NA
 
 #select features
@@ -28,13 +29,13 @@ selected_cols=c("work_date", "activity", "district", "county", "route", "work_du
                 "surface_type", "num_lanes", "road_use", "road_width", "median_type", "barrier_type", "hwy_group", "access_type", 
                 "terrain_type", "road_speed", "road_adt", "population_code", "peak_aadt", "aadt", "truck_aadt", "collision_density11_12", "collision_id", 
                 "collision_time", "collision_day", "collision_weather_cond_1", "collision_weather_cond_2", "collision_location_type", 
-                "collision_ramp_intersection", "collision_severity", "collision_num_killed", "collision_num_injured", "collision_party_count", 
+                "collision_ramp_intersection", "collision_num_killed", "collision_num_injured", "collision_party_count", 
                 "collision_prime_factor", "collision_violation_cat", "collision_surface_cond", "collision_road_cond_1", "collision_road_cond_2", 
-                "collision_lighting_cond", "collision_control_device", "collision_road_type")
+                "collision_lighting_cond", "collision_control_device", "collision_road_type", "collision_severity")
 
 
 #cleanUp features and convert to type
-source("./Codes/FUNC_clean(FinalDataSet).R")
+source("./Codes/PMRF-Data analysis/FUNC_clean(FinalDataSet).R")
 df=cleanUp_Dataset(df, selected_cols)
 
 #check clean up process
@@ -56,13 +57,10 @@ df=na.omit(setDT(df), cols = c("work_month", "work_day", "district", "county", "
 #unique(df$collision_severity)
 
 unique(df$collision_severity)
-df$collision_severity=factor(df$collision_severity, levels = c(levels(df$collision_severity), "F"))
-df$collision_severity[df$collision_severity %in% c(1, 2)]="F" #for severe injury or fatality
-df$collision_severity[df$collision_severity %in% c(3, 4)]=2 #for visible injury and complaint of injury
-df$collision_severity[df$collision_severity==0]=1           #for PDO
-df$collision_severity[is.na(df$collision_severity)]=0       #for no collision
-df$collision_severity[df$collision_severity =="F"]="3"
-df$collision_severity=droplevels(df$collision_severity)
+df$collision_severity[df$collision_severity %in% c(1, 2, 3, 4)]=2
+df$collision_severity[df$collision_severity==0]=1
+df$collision_severity[is.na(df$collision_severity)]=0
+df$collision_severity=factor(df$collision_severity, levels = c(0, 1, 2), ordered = TRUE)
 unique(df$collision_severity)
 
 #check and plot the proportion of response variable classes
@@ -77,30 +75,24 @@ ggplot(data=df, aes(x=collision_severity, fill=collision_severity))+
   xlab("collision severity")+
   labs(fill="collision")
 
+#create training and testing splits
+train.ind=createDataPartition(df$collision_severity, times = 1, p=0.7, list = FALSE)
+training.df=df[train.ind, ]
+testing.df=df[-train.ind, ]
+
 ################################################################################################
 ###skip if data is not heavily skewed
 #SMOTE balanced sampling
-balanced01.df=SMOTE(collision_severity~., 
-                    data = droplevels.data.frame(df[which(df$collision_severity %in% c(0,1)),]), 
-                    perc.over = 200, perc.under = 200, k = 5)
-balanced02.df=SMOTE(collision_severity~., 
-                    data = droplevels.data.frame(df[which(df$collision_severity %in% c(0,2)),]), 
-                    perc.over = 500, perc.under = 200, k = 5)
-balanced03.df=SMOTE(collision_severity~., 
-                    data = droplevels.data.frame(df[which(df$collision_severity %in% c(0,3)),]), 
-                    perc.over = 5000, perc.under = 200, k = 5)
+balanced.df=SMOTE(collision_id~., 
+                  data = training.df, 
+                  perc.over = 1000, perc.under = 300, k = 5)
 
-balanced.df=rbind(balanced01.df, balanced02.df, balanced03.df)
 balanced.df=balanced.df %>% distinct()
 ################################################################################################
-#create training and testing splits
-train.ind=createDataPartition(balanced.df$collision_severity, times = 1, p=0.7, list = FALSE)
-training.df=balanced.df[train.ind, ]
-testing.df=balanced.df[-train.ind, ]
 
 #check and plot the proportion of response variable classes
 length(which(balanced.df$collision_id==1))/length(balanced.df$collision_id)
-ggplot(data=training.df, aes(x=collision_severity, fill=collision_severity))+
+ggplot(data=balanced.df, aes(x=collision_severity, fill=collision_severity))+
   geom_bar()+
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=14),
         axis.title.x = element_text(size = 20, face="bold"),
@@ -111,9 +103,9 @@ ggplot(data=training.df, aes(x=collision_severity, fill=collision_severity))+
   labs(fill="collision")
 
 #process the balanced data set for categorical and numerical variables
-balanced.cat.df=training.df %>% select_if(is.factor)
+balanced.cat.df=balanced.df %>% select_if(is.factor)
 `isnot.factor` = Negate(`is.factor`)
-balanced.num.df=training.df %>% select_if(isnot.factor)
+balanced.num.df=balanced.df %>% select_if(isnot.factor)
 
 #drop collision and closure columns, some of NA variabels can be translated to 0-1 categories or numerics
 balanced.cat.df=balanced.cat.df[,-c("closure_workType", "closure_duration", "closure_type", "closure_facility")]
@@ -145,9 +137,10 @@ dummy.mod=dummyVars(~., data = balanced.cat.df, fullRank = TRUE, drop2nd=TRUE)
 balanced.cat.df=predict(dummy.mod, newdata = balanced.cat.df)
 
 #preprocess numeric variables and center+scale them to range 0-1
-preprocess.mod=preProcess(balanced.num.df, method = c("center", "scale"), rangeBounds = c(0, 1))
-balanced.num.df=predict(preprocess.mod, balanced.num.df)
-balanced.num.df=data.matrix(balanced.num.df)
+#preprocess.mod=preProcess(balanced.num.df, method = c("center", "scale"), rangeBounds = c(0, 1))
+#balanced.num.df=predict(preprocess.mod, balanced.num.df)
+balanced.num.df=apply(balanced.num.df, 2, function(col) reshape::rescaler(col, type="range"))
+#balanced.num.df=data.matrix(balanced.num.df)
 
 #join the two matrix for more preprocessing
 training.df=cbind(balanced.cat.df, balanced.num.df)
@@ -211,6 +204,10 @@ if ("collision_id.1" %in% colnames(training.df)){
 #   vimp$var <- rownames(vimp)
 #   vimp
 # }
+
+#ord.fit=polr(y~., data = training.df, Hess = TRUE)
+
+
 
 ordFuncs=lrFuncs
 ordFuncs$fit=function(x, y, first, last, ...){

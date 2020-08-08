@@ -76,21 +76,21 @@ ggplot(data=training.df, aes(x=collision_id, fill=collision_id))+
 ###############################################################################################################################################
 ###############################################################################################################################################
 #drop collision and closure columns, some of NA variabels can be translated to 0-1 categories or numerics
-temp.df=training.df[,-c("closure_workType", "closure_duration", "closure_type", "closure_facility")]
-temp.df$closure_cozeepMazeep=ifelse(is.na(temp.df$closure_cozeepMazeep), 0, 1)
-temp.df$closure_detour=ifelse(is.na(temp.df$closure_detour), 0, 1)
+train.df=training.df[,-c("closure_workType", "closure_duration", "closure_type", "closure_facility")]
+train.df$closure_cozeepMazeep=ifelse(is.na(train.df$closure_cozeepMazeep), 0, 1)
+train.df$closure_detour=ifelse(is.na(train.df$closure_detour), 0, 1)
 
-temp.df=temp.df[,-c("closure_lanes")]
-temp.df$closure_coverage[is.na(temp.df$closure_coverage)]=0
-temp.df$closure_coverage=abs(temp.df$closure_coverage)
-temp.df$closure_length[is.na(temp.df$closure_length)]=0
+train.df=train.df[,-c("closure_lanes")]
+train.df$closure_coverage[is.na(train.df$closure_coverage)]=0
+train.df$closure_coverage=abs(train.df$closure_coverage)
+train.df$closure_length[is.na(train.df$closure_length)]=0
 
-temp.df=temp.df[,-c("collision_time", "collision_day", "collision_weather_cond_1", "collision_weather_cond_2", 
+train.df=train.df[,-c("collision_time", "collision_day", "collision_weather_cond_1", "collision_weather_cond_2", 
                                     "collision_location_type", "collision_ramp_intersection", "collision_severity", "collision_prime_factor", 
                                     "collision_violation_cat", "collision_surface_cond", "collision_road_cond_1", "collision_road_cond_2", 
                                     "collision_lighting_cond", "collision_control_device", "collision_road_type")]
 
-temp.df=temp.df[,-c("collision_num_killed", "collision_num_injured", "collision_party_count")]
+train.df=train.df[,-c("collision_num_killed", "collision_num_injured", "collision_party_count")]
 
 test.df=testing.df[,-c("closure_workType", "closure_duration", "closure_type", "closure_facility")]
 test.df$closure_cozeepMazeep=ifelse(is.na(test.df$closure_cozeepMazeep), 0, 1)
@@ -111,13 +111,21 @@ test.df=test.df[,-c("collision_num_killed", "collision_num_injured", "collision_
 ###############################################################################################################################################
 ###############################################################################################################################################
 #prepare sparse matrices for xgboost
-preprocess.mod=preProcess(temp.df, method = c("center", "scale"), rangeBounds = c(0,1))
-temp.df=predict(preprocess.mod, temp.df)
-test.df=predict(preprocess.mod, test.df)
+#preprocess.mod=preProcess(train.df, method = c("center", "scale"), rangeBounds = c(0,1))
+`isnot.factor` = Negate(`is.factor`)
+train.num.df=train.df%>%select_if(isnot.factor)
+train.num.df=apply(train.num.df, 2, function(col) reshape::rescaler(col, type="range"))
+train.df[, which(colnames(train.df)%in%colnames(train.num.df))]=train.num.df
+rm(train.num.df)
 
-dtest=sparse.model.matrix(collision_id~.-1, data = data.frame(test.df))
-dtrain=sparse.model.matrix(collision_id~.-1, temp.df)
-label=as.numeric(as.character(training.df$collision_id))
+test.num.df=test.df%>%select_if(isnot.factor)
+test.num.df=apply(test.num.df, 2, function(col) reshape::rescaler(col, type="range"))
+test.df[, which(colnames(test.df)%in%colnames(test.num.df))]=test.num.df
+rm(test.num.df)
+
+dtrain=sparse.model.matrix(collision_id~.-1, train.df)
+label=as.numeric(as.character(train.df$collision_id))
+dtest=sparse.model.matrix(collision_id~.-1, test.df)
 
 #evaluate the weight of each class in response variable
 sumwpos=sum(label==1)
@@ -131,10 +139,10 @@ registerDoParallel(myCl)
 
 #define the parameter grid
 xgb.grid=expand.grid(nrounds=100, 
-                     eta=seq(0.1, 2, 0.2),
+                     eta=seq(0.1, 1, 0.1),
                      max_depth=seq(3, 10, 1),
                      gamma = seq(0, 10, 2.5), 
-                     subsample = 0.1,
+                     subsample = 0.7,
                      min_child_weight = c(1, 3, 5), 
                      colsample_bytree = 1)
 
@@ -286,7 +294,7 @@ shap_values$mean_shap_score
 rm_col=names(shap_values$mean_shap_score)[which(shap_values$mean_shap_score==0)]
 train.df=as.data.frame(as.matrix(dtrain))
 train.df=train.df[,!names(train.df)%in%rm_col]
-train.ind=createDataPartition(temp.df$collision_id, 
+train.ind=createDataPartition(train.df$collision_id, 
                               times = 1, 
                               p=0.5, 
                               list = FALSE)
@@ -368,27 +376,36 @@ ggplot(data = boruta.imp.df, aes(x=variable, y=value, fill=decision))+
 
 ####################################################################
 #shap analysis for Boruta features from a full model on the test set
+#evaluate shap values
+#
+#attach("./bin/PMRF paper/xgb.boruta.RData", pos = 2)
+#xgb.brouta=xgb.brouta
+#detach("file:./bin/PMRF paper/xgb.boruta.RData")
+#
+shap_values=shap.values(xgb_model = xgb.mod, X_train = dtest)
+shap_values$mean_shap_score
 shap.feat=unique(boruta.imp.df$variable)
-X=as.matrix(dtest)[, shap.feat]
-preprocess.mod=preProcess(X, 
-                          method = "scale", 
-                          rangeBounds = c(0, 1))
-X=predict(preprocess.mod, X)
+X=as.matrix(dtest)
 X=as.data.frame(X)
+X=X[, names(X) %in% shap.feat]
 
 #removing some outliers for better visualization
-inliers=which(X$work_duration<=6 & X$work_duration>=-1 &
-              X$work_length<=6 & X$work_length>=-1 &
-              X$road_adt<=3 & X$road_adt>=-1 &
-              X$peak_aadt<=4 & X$peak_aadt>=-1 &
-              X$aadt<=3 & X$aadt>=-1 &
-              X$truck_aadt<=3 & X$truck_aadt>=-1 &
-              X$collision_density11_12<=3 & X$collision_density11_12>=-1 &
-              X$closure_coverage<=3 & X$closure_coverage>=-1 &
-              X$closure_length<=5 & X$closure_length>=-1)
+inliers=which(X$work_duration<=0.2 & X$work_duration>=0 &
+              X$work_length<=0.4 & X$work_length>=0 &
+              X$road_adt<=0.8 & X$road_adt>=0 &
+              X$peak_aadt<=0.3 & X$peak_aadt>=0 &
+              X$aadt<=0.8 & X$aadt>=0 &
+              X$truck_aadt<=0.4 & X$truck_aadt>=0 &
+              X$collision_density11_12<=0.6 & X$collision_density11_12>=0 &
+              X$closure_coverage<=1 & X$closure_coverage>=0 &
+              X$closure_length<=0.2 & X$closure_length>=0)
 
 #shap summary figure
-pp=shap.plot.summary.wrap2(shap_score = as.data.frame(as.matrix(shap_values$shap_score))[inliers, shap.feat], 
+shap_score_filtered=shap_values$shap_score
+shap_score_filtered=setDF(shap_score_filtered)
+shap_score_filtered=shap_score_filtered[inliers, names(shap_score_filtered) %in% shap.feat]
+
+pp=shap.plot.summary.wrap2(shap_score = shap_score_filtered, 
                         X = X[inliers,],
                         dilute=20)
 shap.names=c("Truck AADT", "Work duration", "Work length", "Closure length",
@@ -454,7 +471,7 @@ xgb.mod=xgboost(data = shap.df,
 
 #evaluate shap values
 fin_shap_values=shap.values(xgb_model = xgb.mod, 
-                            X_train = X)
+                            X_train = dtest)
 fin_shap_values$mean_shap_score
 
 #remove outliers for better visualization
@@ -513,15 +530,33 @@ pp+theme_ipsum(axis_title_just = "center")+
 shap_long <- shap.prep(shap_contrib = fin_shap_values$shap_score, X_train = X)
 shap_int <- shap.prep.interaction(xgb_mod = xgb.mod, X_train = X)
 
+shap_long_inliers <- shap.prep(shap_contrib = as.data.frame(as.matrix(fin_shap_values$shap_score))[inliers,],
+                               X_train = X[inliers, ])
+shap_int_inliers <- shap.prep.interaction(xgb_mod = xgb.mod, X_train = X[inliers, ])
 
+g1 <- shap.plot.dependence(data_long = shap_long_inliers, 
+                           x = 'work_length', 
+                           y = 'closure_id1', 
+                           color_feature = 'closure_id1',
+                           dilute=20) + 
+  ggtitle("(A) SHAP values of Time trend vs. Time trend")
 
-
+g2 <- shap.plot.dependence(data_long = shap_long_inliers,
+                           data_int = shap_int_inliers,
+                           x = 'work_length', 
+                           y = 'closure_id1', 
+                           color_feature = 'closure_id1',
+                           dilute=20) + 
+  ggtitle("(A) SHAP values of Time trend vs. Time trend")
 
 
 #predict the test data
+testing.df=fread("./bin/test(collision2class)_by.roadCondition.csv", sep = ",", header = TRUE)
+y_test=testing.df$collision_id.1
+rm(testing.df)
 temp.predict=predict(xgb.mod, dtest)
-temp.predict=as.numeric(temp.predict > 0.4)
-confusionMatrix(as.factor(temp.predict), as.factor(testing.df$collision_id), positive = "1")
+temp.predict=as.numeric(temp.predict > 0.5)
+confusionMatrix(as.factor(temp.predict), as.factor(testing.df$collision_id.1), positive = "1")
 
 ###############################################################################################################################################
 ###############################################################################################################################################

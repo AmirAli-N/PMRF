@@ -6,7 +6,7 @@ cleanUp_Dataset=function(df, cols){
   library(lubridate)
   library(anytime)
   
-  df=select(df, cols)
+  df=dplyr::select(df, cols)
   final_cols=c()
   
   if ("work_date" %in% cols){
@@ -331,6 +331,6 @@ cleanUp_Dataset=function(df, cols){
   }
   
   #re-arrange columns
-  df=select(df, final_cols)
+  df=dplyr::select(df, final_cols)
   return(df)
 }

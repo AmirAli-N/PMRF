@@ -16,6 +16,7 @@ library(ggrepel)
 library(forcats)
 library(magrittr)
 library(ordinal)
+library(VGAM)
 
 set.seed(123)
 
@@ -187,8 +188,11 @@ ord.mod=glmnetcr(x_train,
                  alpha = 1,
                  maxit = 200)
 
-ord.link=clm(y_class~. , data = data.frame(x_train), weights = w,
+ord.link=clm(y_class~. , data = data.frame(x_train),
              link = "logit", doFit = TRUE)
+
+ctrl=trainControl(method="cv", number = 2, verboseIter = TRUE)
+ord.adj=train(x_train, y_class, method = "vglmAdjCat", link="logit", parallel=TRUE)
 
 print(ord.mod)
 best.fit=select.glmnetcr(ord.mod, which = "BIC")

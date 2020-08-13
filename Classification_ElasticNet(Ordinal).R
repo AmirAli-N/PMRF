@@ -169,6 +169,11 @@ w[which(y_class==0)]=w_0
 w[which(y_class==1)]=w_1
 w[which(y_class==2)]=w_2
 
+w=rep(0, length(y_class))
+w[which(y_class==0)]=1/6
+w[which(y_class==1)]=2/6
+w[which(y_class==2)]=3/6
+
 y_test_class=y_test$collision_severity
 y_test_class[y_test_class==1 | y_test_class==2 | y_test_class==3 | y_test_class==4]=2
 y_test_class[y_test_class==0]=1
@@ -191,15 +196,56 @@ ord.mod=glmnetcr(x_train,
 ord.link=clm(y_class~. , data = data.frame(x_train),
              link = "logit", doFit = TRUE)
 
-ctrl=trainControl(method="cv", number = 2, verboseIter = TRUE)
-ord.adj=train(x_train, y_class, method = "vglmAdjCat", link="logit", parallel=TRUE)
+ord.gam=vglm(ordered(y_class)~.,
+             data = data.frame(x_train),
+             family = cumulative(link=logitlink, reverse = TRUE, parallel = TRUE),
+             #weights = w,
+             trace=TRUE)
+
+
+#ctrl=trainControl(method="cv", number = 2, verboseIter = TRUE)
+#ord.adj=train(x_train, y_class, method = "vglmAdjCat", link="logit", parallel=TRUE)
 
 print(ord.mod)
 best.fit=select.glmnetcr(ord.mod, which = "BIC")
 coef(ord.mod, s=best.fit)
 
-pred=predict(ord.mod, newx = x_test)
-pred=predict(ord.link, newdata=test, type="class")
+pred.glmnetcr=predict(ord.mod, newx = x_test)
+pred.clm=predict(ord.link, newdata=test, type="class")
+
+pred.gam=predictvglm(ord.gam, newdata = data.frame(x_test), se.fit = FALSE, type = "response")
+pred.gam=cbind.data.frame(pred.gam, class=apply(pred.gam, 1, function(x) which(x==max(x))-1))
+confusionMatrix(as.factor(pred.gam$class), as.factor(y_test_class))
+
 confusionMatrix(as.factor(pred$class[, best.fit]), as.factor(y_test_class))
 confusionMatrix(as.factor(pred$fit), as.factor(y_test_class))
                 
+
+
+###################################################
+y_1=y_class
+y_1[y_1==1 | y_1==2]=1
+y_1=droplevels(y_1)
+
+y_2=y_class
+y_2[y_2==0 | y_2==1]=0
+y_2[y_2==2]=1
+y_2=droplevels(y_2)
+
+w=rep(0, length(y_class))
+w[which(y_class==0)]=w_0
+w[which(y_class==1)]=w_1+w_2
+
+glm.mod1=glm(as.factor(y_1)~., data = data.frame(x_train), family = binomial(link = "logit"), weights = w)
+pred.glm1=predict(glm.mod1, data.frame(x_test), type="response")
+
+w=rep(0, length(y_class))
+w[which(y_class==0)]=w_0+w_1
+w[which(y_class==1)]=w_2
+
+glm.mod2=glm(as.factor(y_2)~., data = data.frame(x_train), family = binomial(link = "logit"), weights = w)
+pred.glm2=predict(glm.mod2, data.frame(x_test), type="response")
+
+pred.glm=cbind.data.frame(p0=1-pred.glm1, p1=pred.glm1-pred.glm2, p2=pred.glm2)
+pred.glm=cbind.data.frame(pred.glm, class=apply(pred.glm, 1, function(x) which(x==max(x))-1))
+confusionMatrix(as.factor(pred.glm$class), as.factor(y_test_class))

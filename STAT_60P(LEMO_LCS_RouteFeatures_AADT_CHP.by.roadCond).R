@@ -188,7 +188,7 @@ df.temp=df[, c("collision_id", "truck_aadt")]
 df.temp$collision_id=ifelse(is.na(df$collision_id), "0", "1")
 
 ggplot(df.temp, aes(x=collision_id, y=truck_aadt, fill=collision_id))+
-  geom_violin(trim = TRUE, scale = "width", na.rm = TRUE)+
+  geom_violin(trim = TRUE, scale = "area", na.rm = TRUE)+
   #scale_y_continuous(limits = c(0, 450))+
   scale_x_discrete(labels=c("No collision", "Collision"))+
   theme_ipsum(axis_title_just = 'center')+

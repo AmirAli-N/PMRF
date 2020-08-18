@@ -205,7 +205,7 @@ TRUCK.matches$R.ahead_truck_aadt=as.numeric(TRUCK.matches$R.ahead_truck_aadt)
 TRUCK.matches$L.ahead_truck_aadt=as.numeric(TRUCK.matches$L.ahead_truck_aadt)
 
 #take average rowWise
-TRUCK.matches=cbind(TRUCK.matches, truck_aadt=rowMeans(TRUCK.matches, na.rm = TRUE))
+TRUCK.matches=cbind(TRUCK.matches, truck_aadt=rowMeans(TRUCK.matches[,2:3], na.rm = TRUE))
 
 #drop columns
 TRUCK.matches=TRUCK.matches[,-c("R.ahead_truck_aadt", "L.ahead_truck_aadt")]

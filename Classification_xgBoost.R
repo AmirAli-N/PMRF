@@ -403,14 +403,13 @@ inliers=which(X$work_duration<=0.2 & X$work_duration>=0 &
 #shap summary figure
 shap_score_filtered=shap_values$shap_score
 shap_score_filtered=setDF(shap_score_filtered)
-shap_score_filtered=shap_score_filtered[inliers, names(shap_score_filtered) %in% shap.feat]
+#shap_score_filtered=shap_score_filtered[inliers, names(shap_score_filtered) %in% shap.feat]
+shap_score_filtered=shap_score_filtered[, names(shap_score_filtered) %in% shap.feat]
 
 pp=shap.plot.summary.wrap2(shap_score = shap_score_filtered, 
-                        X = X[inliers,],
+                        #X = X[inliers,],
+                        X=X,
                         dilute=20)
-shap.names=c("Truck AADT", "Work duration", "Work length", "Closure length",
-             "Peak AADT", "Collision density", "ADT", "Closure coverage",
-             "AADT", "Lane closure = 1")
 pp+theme_ipsum(axis_title_just = "center")+
   theme(plot.title = element_blank(),
         axis.text.x = element_text(hjust = 0.5, 
@@ -486,13 +485,18 @@ inliers=which(X$work_duration<=6 & X$work_duration>=-1 &
                 X$closure_length<=5 & X$closure_length>=-1)
 
 #shap summary plot
-pp=shap.plot.summary.wrap2(shap_score = as.data.frame(as.matrix(fin_shap_values$shap_score))[inliers,], 
+#pp=shap.plot.summary.wrap2(shap_score = as.data.frame(as.matrix(fin_shap_values$shap_score))[inliers,],
+pp=shap.plot.summary.wrap2(shap_score = shap_score_filtered,
                            X = X[inliers,],
                            dilute=20)
 pp$layers[[3]]=NULL
-shap.names=c("Collision density", "ADT", "Work length", "Work duration", 
-             "Peak AADT", "Truck AADT", "Closure length", "Lane closure",
-             "AADT", "Closure coverage")
+shap.names=c("Lane closure", "Work length", "Collision density", "Truck AADT", 
+             "Closure length", "ADT", "Peak AADT", "AADT", "Work duration", 
+             "Closure coverage")
+shap.levels=colnames(shap_score_filtered)
+shap.levels=factor(shap.levels, levels = c("closure_id1", "work_length", "collision_density11_12",
+                                           "truck_aadt",  "closure_length", "road_adt", "peak_aadt",
+                                           "aadt", "work_duration", "closure_coverage"), ordered = TRUE)
 pp+theme_ipsum(axis_title_just = "center")+
   theme(plot.title = element_blank(),
         axis.text.x = element_text(hjust = 0.5, 
@@ -519,7 +523,7 @@ pp+theme_ipsum(axis_title_just = "center")+
         legend.position = "right",
         legend.margin = margin(0, 0, 0, 0),
         legend.box.margin = margin(0, 0, 0, 0))+
-  scale_x_discrete(labels=shap.names)+
+  scale_x_discrete(limits=rev(levels(shap.levels)), labels=rev(shap.names))+
   xlab("Features")+
   ylab("Shapley Values")+
   guides(colour=guide_colorbar(label.position = "right",

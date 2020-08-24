@@ -16,7 +16,7 @@ df[df==""]=NA
 ############################
 ## activity by number of closure
 ############################
-df.temp=df[,c("wono", "activity", "closure_id")]
+df.temp=df[,c("wono", "activity", "activity_descr", "closure_id")]
 df.temp=setDT(df.temp)[order(activity), .(freqC=length(unique(closure_id)),
                                           freqW=length(unique(wono))), by=.(activity)]
 setwd("G:/My Drive/WorkingDesk/CalTrans-60% report")
@@ -201,3 +201,55 @@ ggplot(df.temp, aes(x=collision_id, y=truck_aadt, fill=collision_id))+
         axis.line.x = element_line(size=1.2),
         axis.line.y = element_line(size = 1.2))+
   ylab("Truck AADT")
+
+############################
+## activity by proportion of closure
+############################
+df.temp=df[,c("wono", "activity", "activity_descr", "closure_id")]
+df.temp.cl=df.temp[which(!is.na(df.temp$closure_id)),]
+df.temp.cl=setDT(df.temp.cl)[order(activity), 
+                             .(freqC=length(unique(wono))), 
+                             by=.(activity, activity_descr)]
+
+df.temp.w=setDT(df.temp)[order(activity), 
+                         .(freqW=length(unique(wono))), 
+                         by=.(activity, activity_descr)]
+
+df.fin=merge(df.temp.w, df.temp.cl, by="activity", all.x = TRUE)
+df.fin=df.fin[which(df.fin$activity_descr.x==df.fin$activity_descr.y),]
+df.fin=df.fin[which(!is.na(df.fin$activity)),]
+df.fin$freqC[is.na(df.fin$freqC)]=0
+df.fin=cbind.data.frame(df.fin, prop=df.fin$freqC/df.fin$freqW)
+df.fin=setDT(df.fin)[order(-prop),,]
+df.fin=df.fin[,-4]
+fwrite(df.fin, file = "act.by.closure.prop.csv", sep=",", append=FALSE)
+
+df.cl.prop=df.fin
+rm(df.fin, df.temp.cl, df.temp.w)
+############################
+## activity by number of crew
+############################
+df.temp=df[,c("wono", "activity", "activity_descr")]
+df.temp=setDT(df.temp)[order(activity), 
+                       .(freqW=length(unique(wono))), 
+                       by=.(activity, activity_descr)]
+
+df.crew=fread(file="activity+crew.csv", sep=",", header = TRUE)
+
+df.temp=cbind.data.frame(df.temp, avg.crew=df.crew$avg[match(df.temp$activity, df.crew$ACTIVITY)])
+df.temp=cbind.data.frame(df.temp, crew.score=df.temp$avg.crew/df.temp$freqW)
+
+df.temp=setDT(df.temp)[order(-freqW, activity),,]
+df.temp=df.temp %>% distinct(activity, .keep_all = TRUE)
+df.temp=df.temp[!is.na(df.temp$activity),]
+
+df.temp=setDT(df.temp)[order(-crew.score),,]
+df.temp=df.temp[!which(startsWith(df.temp$activity, "H")),]
+
+fwrite(df.temp, file = "act.by.crew.prop.csv", sep=",", append=FALSE)
+df.crew.prop=df.temp
+rm(df.crew)
+
+############################
+## activity by access type
+############################

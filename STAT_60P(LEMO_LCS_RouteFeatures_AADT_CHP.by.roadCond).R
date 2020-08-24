@@ -253,3 +253,42 @@ rm(df.crew)
 ############################
 ## activity by access type
 ############################
+df.temp=df[,c("wono", "activity", "activity_descr", "access_type")]
+df.temp=setDT(df.temp)[order(activity),
+                       .(freqW=length(unique(wono))),
+                       by=.(activity, activity_descr, access_type)]
+df.temp=df.temp[!which(is.na(df.temp$freqW)),]
+df.temp=df.temp[!which(is.na(df.temp$access_type)),]
+df.temp=setDT(df.temp)[order(-freqW, activity),,]
+df.temp=df.temp %>% distinct(activity, access_type, .keep_all = TRUE)
+
+df.temp=df.temp %>% group_by(activity) %>% mutate(prop=freqW/sum(freqW))
+df.temp=setDT(df.temp)[order(activity, -freqW),,]
+
+df.temp$access_type[df.temp$access_type=="E"]=4
+df.temp$access_type[df.temp$access_type=="C"]=3
+df.temp$access_type[df.temp$access_type=="F"]=2
+df.temp$access_type[df.temp$access_type=="S"]=1
+
+df.score=df.temp %>% group_by(activity) %>% mutate(score=sum(prop*as.numeric(access_type)))
+df.score$score=rescaler(df.score$score, type="range")
+df.score=df.score %>% distinct(activity, activity_descr, score, .keep_all = FALSE)
+
+fwrite(df.score, file = "act.by.access.prop.csv", sep=",", append = FALSE)
+df.access.prop=df.score
+rm(df.score)
+##################################
+## activity by duration and length
+##################################
+df.temp=df[,c("wono", "activity", "activity_descr", "work_duration", "work_length")]
+df.temp = df.temp %>% group_by(activity) %>% mutate(mean_duration=mean(work_duration, na.rm = TRUE),
+                                                    mean_length=mean(work_length, na.rm = TRUE))
+df.temp = df.temp %>% distinct(activity, activity_descr, mean_duration, mean_length, .keep_all = FALSE)
+df.temp = df.temp %>% distinct(activity, .keep_all = TRUE)
+
+df.temp$mean_duration=rescaler(df.temp$mean_duration, type="range")
+df.temp$mean_length=rescaler(df.temp$mean_length, type="range")
+
+fwrite(df.temp, file="act.by.length+duration.csv", sep = ",", append = FALSE)
+df.length.duration=df.temp
+

@@ -6,6 +6,7 @@ library(viridis)
 library(hrbrthemes)
 library(ggrepel)
 library(ggforce)
+library(reshape2)
 
 setwd("Z:/PMRF/Amir/bin/Final Datasets")
 df=fread(file="LEMO_WorkOrder.csv", sep=",", header = TRUE)
@@ -127,3 +128,17 @@ pg=ggplot_gtable(pb)
 plot(pg)
 
 rm(df.temp, p, pb, pg)
+
+
+############################
+## Activities by cost
+############################
+df.temp=df[,.(cost.mean=mean(LEM.sum, na.rm = TRUE)),
+           by=.(Activity, `Activity Description`)]
+df.temp = df.temp %>% distinct(Activity, .keep_all = TRUE)
+
+df.temp$cost.mean=rescaler(df.temp$cost.mean, type="range")
+
+fwrite(df.temp, file="act.by.cost.csv", sep=",", append = FALSE)
+df.cost=df.temp
+names(df.cost)[1:2]=c("activity", "activity_descr")

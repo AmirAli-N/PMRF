@@ -226,6 +226,7 @@ df.fin=df.fin[,-4]
 fwrite(df.fin, file = "act.by.closure.prop.csv", sep=",", append=FALSE)
 
 df.cl.prop=df.fin
+names(df.cl.prop)[5]="closure_prop"
 rm(df.fin, df.temp.cl, df.temp.w)
 ############################
 ## activity by number of crew
@@ -247,8 +248,9 @@ df.temp=df.temp[!is.na(df.temp$activity),]
 df.temp=setDT(df.temp)[order(-crew.score),,]
 df.temp=df.temp[!which(startsWith(df.temp$activity, "H")),]
 
-fwrite(df.temp, file = "act.by.crew.prop.csv", sep=",", append=FALSE)
 df.crew.prop=df.temp
+df.crew.prop$crew.score=rescaler(df.crew.prop$crew.score, type = "range")
+fwrite(df.crew.prop, file = "act.by.crew.prop.csv", sep=",", append=FALSE)
 rm(df.crew)
 
 ############################
@@ -277,6 +279,7 @@ df.score=df.score %>% distinct(activity, activity_descr, score, .keep_all = FALS
 
 fwrite(df.score, file = "act.by.access.prop.csv", sep=",", append = FALSE)
 df.access.prop=df.score
+names(df.access.prop)[3]="access_score"
 rm(df.score)
 ##################################
 ## activity by duration and length

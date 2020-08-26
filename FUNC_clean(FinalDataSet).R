@@ -155,54 +155,62 @@ cleanUp_Dataset=function(df, cols){
   if ("closure_coverage" %in% cols){
     #df$closure_coverage[which(is.na(df$closure_coverage))]=0
     df$closure_coverage=as.numeric(df$closure_coverage)
+    df$closure_coverage[is.na(df$closure_coverage)]=0
     final_cols=c(final_cols, "closure_coverage")
   }
   
   if ("closure_length" %in% cols){
     #df$closure_length[which(is.na(df$closure_length))]=0
     df$closure_length=as.numeric(df$closure_length)
+    df$closure_length[is.na(df$closure_length)]=0
     final_cols=c(final_cols, "closure_length")
   }
   
   if ("closure_workType" %in% cols){
     unique(df$closure_workType)
+    df$closure_workType[is.na(df$closure_workType)]="No closure"
     df$closure_workType=as.factor(df$closure_workType)
     final_cols=c(final_cols, "closure_workType")
   }
   
   if ("closure_duration" %in% cols){
     unique(df$closure_duration)
+    df$closure_duration[is.na(df$closure_duration)]="No closure"
     df$closure_duration=as.factor(df$closure_duration)
     final_cols=c(final_cols, "closure_duration")
   }
   
   if ("closure_cozeepMazeep" %in% cols){
     unique(df$closure_cozeepMazeep)
+    df$closure_cozeepMazeep[is.na(df$closure_cozeepMazeep)]=0
     df$closure_cozeepMazeep=as.factor(df$closure_cozeepMazeep)
     final_cols=c(final_cols, "closure_cozeepMazeep")
   }
   
   if ("closure_detour" %in% cols){
     unique(df$closure_detour)
+    df$closure_detour[is.na(df$closure_detour)]=0
     df$closure_detour=as.factor(df$closure_detour)
     final_cols=c(final_cols, "closure_detour")
   }
   
   if ("closure_type" %in% cols){
     unique(df$closure_type)
+    df$closure_type[is.na(df$closure_type)]="No closure"
     df$closure_type=as.factor(df$closure_type)
     final_cols=c(final_cols, "closure_type")
   }
   
   if ("closure_facility" %in% cols){
     unique(df$closure_facility)
+    df$closure_facility[is.na(df$closure_facility)]="No closure"
     df$closure_facility=as.factor(df$closure_facility)
     final_cols=c(final_cols, "closure_facility")
   }
   
   if ("closure_lanes" %in% cols){
     unique(df$closure_lanes)
-    #df$closure_lanes[which(is.na(df$closure_lanes))]=0
+    df$closure_lanes[is.na(df$closure_lanes)]=0
     df$closure_lanes=as.factor(df$closure_lanes)
     final_cols=c(final_cols, "closure_lanes")
   }
@@ -219,6 +227,7 @@ cleanUp_Dataset=function(df, cols){
     closure_time=difftime(end_time, start_time, units = "hours")
     closure_time=as.numeric(closure_time)
     df=cbind.data.frame(df, "closure_time"=as.numeric(closure_time))
+    df$closure_time[is.na(df$closure_time)]=0
     final_cols=c(final_cols, "closure_time")
   }
   

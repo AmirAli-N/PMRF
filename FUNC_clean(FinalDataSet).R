@@ -207,6 +207,21 @@ cleanUp_Dataset=function(df, cols){
     final_cols=c(final_cols, "closure_lanes")
   }
   
+  if (c("closure_start_date", "closure_start_time", "closure_end_date", "closure_end_time") %in% cols){
+    df$closure_start_date=anydate(df$closure_start_date)
+    df$closure_end_date=anydate(df$closure_end_date)
+    
+    start_time=ifelse((is.na(df$closure_start_date) | is.na(df$closure_start_time)), NA, 
+                      paste(df$closure_start_date, df$closure_start_time, sep = " "))
+    end_time=ifelse((is.na(df$closure_end_date) | is.na(df$closure_end_time)), NA,
+                    paste(df$closure_end_date, df$closure_end_time, sep = " "))
+    
+    closure_time=difftime(end_time, start_time, units = "hours")
+    closure_time=as.numeric(closure_time)
+    df=cbind.data.frame(df, "closure_time"=as.numeric(closure_time))
+    final_cols=c(final_cols, "closure_time")
+  }
+  
   if ("collision_id" %in% cols){
     df$collision_id=ifelse(is.na(df$collision_id), 0, 1)
     df$collision_id=as.factor(df$collision_id)

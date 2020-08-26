@@ -21,12 +21,6 @@ library(forcats)
 library(Boruta)
 library(reshape2)
 
-
-library(Ckmeans.1d.dp)
-library(devtools)
-library(xgboostExplainer)
-
-
 set.seed(123)
 
 df=fread(file="./bin/LEMO_CHP.by.roadCond.csv", sep=",", header=TRUE)
@@ -37,7 +31,8 @@ df[df==""]=NA
 colnames(df)
 selected_cols=c("work_date", "activity", "district", "county", "route", "work_duration", "work_length", 
                 "closure_id", "closure_coverage", "closure_length", "closure_workType", "closure_duration", "closure_cozeepMazeep", 
-                "closure_detour", "closure_type", "closure_facility", "closure_lanes",
+                "closure_detour", "closure_type", "closure_facility", "closure_lanes", "closure_start_date", "closure_start_time",
+                "closure_end_date", "closure_end_time",
                 "surface_type", "num_lanes", "road_use", "road_width", "median_type", "barrier_type", "hwy_group", "access_type", 
                 "terrain_type", "road_speed", "road_adt", "population_code", "peak_aadt", "aadt", "truck_aadt", "collision_density11_12", "collision_id", 
                 "collision_time", "collision_day", "collision_weather_cond_1", "collision_weather_cond_2", "collision_location_type", 

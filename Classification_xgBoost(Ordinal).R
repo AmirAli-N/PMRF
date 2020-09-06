@@ -258,16 +258,12 @@ xgb.mod=xgboost(data = dtrain,
 
 #evaluate and plot feature importance
 importance=xgb.importance(feature_names = colnames(dtrain), model = xgb.mod)
-feat.label=importance$Feature[1:30]
-feat.label=c("Closure = 1", "Work length", "Collision density", "Truck AADT",
-             "ADT", "Closure length", "Closure coverage", "Work duration", "Peak AADT",
-             "AADT", "Design speed", "Route ID = 10", "County = SJ", "Activity code = M90000",
-             "Road width", "Work day = Wed.", "Surface type = C", "Work month = Sep.", "Work month = Jul.", 
-              "Route ID = 210", "Work day = Fri.", "Work day = Thu.", 
-             "Work day = Mon.", "Work day = Tue.", "Barrier type = E", "Work month = Jan.",
-             "Work month = Dec.", "District = 8", "District = 4", "Work month = Aug.")
+feat.label=importance$Feature[1:10]
+feat.label=c("Facility = Freeway","Work length","Road ADT","Truck AADT",              
+             "Total lanes","Closure duration","AADT","Closure length",          
+             "Day of mounth","Closure coverage")
 
-(gg=xgb.ggplot.importance(importance_matrix = importance[1:30,]))
+(gg=xgb.ggplot.importance(importance_matrix = importance[1:10,]))
 gg+theme_ipsum(axis_title_just = "center")+
   theme(plot.title = element_blank(),
          axis.text.x = element_text(hjust = 0.5, 
@@ -341,9 +337,9 @@ boruta.imp.df=cbind.data.frame(boruta.imp.df,
                                                                  row.names(boruta.df))])
 
 #rename the features
-boruta.feat=c("Work duration", "Work length", "ADT", "Peak AADT",
-              "AADT", "Truck AADT", "Collision density", "Lane closure = 1", 
-              "Closure coverage", "Closure length")
+boruta.feat=c("Work length", "Road ADT", "Peak AADT", "AADT", "Truck AADT", 
+              "Collision density", "Lane closure", "Closure length", 
+              "Facility = Freeway", "Closure time")
 fac=with(boruta.imp.df, reorder(variable, value, median, order = TRUE))
 boruta.imp.df$variable=factor(boruta.imp.df$variable, levels = levels(fac))
 ggplot(data = boruta.imp.df, aes(x=variable, y=value, fill=decision))+
@@ -395,25 +391,27 @@ X=as.data.frame(X)
 X=X[, names(X) %in% shap.feat]
 
 #removing some outliers for better visualization
-inliers=which(X$work_duration<=0.2 & X$work_duration>=0 &
-              X$work_length<=0.4 & X$work_length>=0 &
-              X$road_adt<=0.8 & X$road_adt>=0 &
-              X$peak_aadt<=0.3 & X$peak_aadt>=0 &
-              X$aadt<=0.8 & X$aadt>=0 &
-              X$truck_aadt<=0.4 & X$truck_aadt>=0 &
-              X$collision_density11_12<=0.6 & X$collision_density11_12>=0 &
-              X$closure_coverage<=1 & X$closure_coverage>=0 &
-              X$closure_length<=0.2 & X$closure_length>=0)
+inliers=which(X$closure_time<=0.000006 & X$closure_time>=0.0000035 &
+                X$work_length<=0.4 & X$work_length>=0 &
+                X$road_adt<=0.8 & X$road_adt>=0 &
+                X$peak_aadt<=0.3 & X$peak_aadt>=0 &
+                X$aadt<=0.8 & X$aadt>=0 &
+                X$truck_aadt<=0.4 & X$truck_aadt>=0 &
+                X$collision_density11_12<=0.6 & X$collision_density11_12>=0 &
+                X$closure_length<=0.2 & X$closure_length>=0)
 
 #shap summary figure
 shap_score_filtered=shap_values$shap_score
 shap_score_filtered=setDF(shap_score_filtered)
-#shap_score_filtered=shap_score_filtered[inliers, names(shap_score_filtered) %in% shap.feat]
-shap_score_filtered=shap_score_filtered[, names(shap_score_filtered) %in% shap.feat]
+shap_score_filtered=shap_score_filtered[inliers, names(shap_score_filtered) %in% shap.feat]
+#shap_score_filtered=shap_score_filtered[, names(shap_score_filtered) %in% shap.feat]
 
+shap.names=c("Closure time", "Facility=Freeway", "Closure length", 
+             "Lane closure", "Collision density", "Truck AADT", "AADT", 
+             "Peak AADT", "Road ADT", "Work lenght")
 pp=shap.plot.summary.wrap2(shap_score = shap_score_filtered, 
-                        #X = X[inliers,],
-                        X=X,
+                        X = X[inliers,],
+                        #X=X,
                         dilute=20)
 pp+theme_ipsum(axis_title_just = "center")+
   theme(plot.title = element_blank(),

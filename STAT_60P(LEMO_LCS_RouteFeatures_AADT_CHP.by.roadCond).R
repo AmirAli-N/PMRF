@@ -138,6 +138,38 @@ ggplot(df.temp, aes(x=closure_id, y=count, fill=closure_id))+
   scale_x_continuous(breaks=c(0, 1), labels=c("Work orders w/o \nlane closure",
                             "Work orders with \nlane closure"))+
   ylab("Number of collisions")
+#############################
+## lane closure by closure facility
+############################
+df.temp=df[,c("wono", "closure_facility", "collision_severity")]
+
+df.temp$collision_severity=ifelse((is.na(df.temp$collision_severity) | 
+                                   df.temp$collision_severity==0), 0, 1)
+df.temp$closure_facility=ifelse((is.na(df.temp$closure_facility) | 
+                                 df.temp$closure_facility!="Freeway"), "Other", "Freeway")
+
+df.temp=setDT(df.temp)[,.(count=length(wono)), by=.(collision_severity, closure_facility)]
+
+ggplot(df.temp, aes(x=closure_facility, y=count, fill=factor(collision_severity)))+
+  geom_bar(position="stack", stat = "identity")
+
+df.temp=df.temp[df.temp$closure_facility!="Other",]
+ggplot(df.temp, aes(x=collision_severity, y=count, fill=closure_facility))+
+  geom_bar(stat="identity")+
+  theme_ipsum(axis_title_just = 'center')+
+  theme(legend.position = 'none',
+        axis.text.x = element_text(size = 18, family = "Century Gothic", hjust = 0.5, color = "black"),
+        axis.title.x = element_blank(),
+        axis.line.x = element_line(size=1.2),
+        axis.line.y = element_line(size=1.2),
+        axis.text.y = element_text(size = 18, family = "Century Gothic", color = "black"),
+        axis.title.y = element_text(margin=margin(0, 15, 0, 0), size = 18, family = "Century Gothic",
+                                    color = "black"))+
+  scale_x_continuous(breaks=c(0, 1), 
+                    labels=c("Work orders w/o \n closures on freeways",
+                             "Work orders with \n closures on freeways"))+
+  ylab("Number of collisions")
+
 ############################
 ## work lenght by number of collision
 ############################
@@ -202,6 +234,53 @@ ggplot(df.temp, aes(x=collision_id, y=truck_aadt, fill=collision_id))+
         axis.line.x = element_line(size=1.2),
         axis.line.y = element_line(size = 1.2))+
   ylab("Truck AADT")
+
+############################
+## collision by closure length
+############################
+df.temp=df[, c("collision_severity", "closure_length")]
+df.temp$collision_severity=ifelse((is.na(df.temp$collision_severity) | 
+                                     df.temp$collision_severity==0), 0, 1)
+df.temp$closure_length[is.na(df.temp$closure_length)]=0
+df.temp$collision_severity=as.factor(df.temp$collision_severity)
+ggplot(df.temp, aes(x=collision_severity, y=closure_length, fill=collision_severity))+
+  geom_violin(trim = TRUE, scale = "area", na.rm = TRUE)+
+  scale_y_continuous(limits = c(0, 75))+
+  scale_x_discrete(labels=c("No collision +\n PDO collisions", "Collision resulting \n injury or fatality"))+
+  theme_ipsum(axis_title_just = 'center')+
+  theme(legend.position = 'none',
+        axis.text.x = element_text(size = 18, family = "Century Gothic", color = "black"),
+        axis.title.x = element_blank(),
+        axis.text.y = element_text(size = 18, family = "Century Gothic", color = "black"),
+        axis.title.y = element_text(margin=margin(0, 15, 0, 0), size = 18, 
+                                    family = "Century Gothic", color = "black"),
+        axis.line.x = element_line(size=1.2),
+        axis.line.y = element_line(size = 1.2))+
+  ylab("Closure length (mile)")
+
+############################
+## collision by closure time
+############################
+df.temp=df[, c("collision_severity", "closure_time")]
+df.temp$collision_severity=ifelse((is.na(df.temp$collision_severity) | 
+                                     df.temp$collision_severity==0), 0, 1)
+df.temp$closure_time[df.temp$closure_time<0]=0
+
+df.temp$collision_severity=as.factor(df.temp$collision_severity)
+ggplot(df.temp, aes(x=collision_severity, y=closure_time, fill=collision_severity))+
+  geom_violin(trim = TRUE, scale = "area", na.rm = TRUE)+
+  scale_y_continuous(limits = c(0, 40))+
+  scale_x_discrete(labels=c("No collision +\n PDO collisions", "Collision resulting \n injury or fatality"))+
+  theme_ipsum(axis_title_just = 'center')+
+  theme(legend.position = 'none',
+        axis.text.x = element_text(size = 18, family = "Century Gothic", color = "black"),
+        axis.title.x = element_blank(),
+        axis.text.y = element_text(size = 18, family = "Century Gothic", color = "black"),
+        axis.title.y = element_text(margin=margin(0, 15, 0, 0), size = 18, 
+                                    family = "Century Gothic", color = "black"),
+        axis.line.x = element_line(size=1.2),
+        axis.line.y = element_line(size = 1.2))+
+  ylab("Closure time (hours)")
 
 ############################
 ## activity by proportion of closure

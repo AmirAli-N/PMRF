@@ -32,11 +32,13 @@ for (i in prop.group){
 }
 p <-  networkD3::sankeyNetwork(Links = links, Nodes = nodes, Source = "source",
                    Target = "target", Value = "value", NodeID = "name",
-                   units = "TWh", fontSize = 16, fontFamily = "century gothic", nodeWidth = 10)
+                   units = "TWh", fontSize = 16, fontFamily = "century gothic", 
+                   nodeWidth = 10, width = 870, height = 562,
+                   margin = margins)
 
 p
 
-.onRender(
+htmlwidgets::onRender(
   p,
   '
   function(el,x){
